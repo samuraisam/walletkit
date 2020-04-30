@@ -239,7 +239,7 @@ cdef extern from "BRCryptoAccount.h":
     ctypedef struct BRCryptoAccountRecord:
         pass
 
-    ctypedef BRCryptoHasherRecord *BRCryptoAccount
+    ctypedef BRCryptoAccountRecord *BRCryptoAccount
 
     const char *cryptoAccountGeneratePaperKey(const char *word_list[])
     BRCryptoBoolean cryptoAccountValidatePaperKey(const char *phrase, const char *words[])
@@ -644,11 +644,6 @@ cdef extern from "BRCryptoWallet.h":
                                                                      BRCryptoCurrency currency,
                                                                      BRCryptoKey key,
                                                                      BRCryptoWallet wallet)
-
-    ctypedef struct BRCryptoWalletSweeperRecord:
-        pass
-
-    ctypedef BRCryptoWalletSweeperRecord *BRCryptoWalletSweeper
 
     BRCryptoWalletSweeper cryptoWalletSweeperCreateAsBtc(BRCryptoNetwork network,
                                                          BRCryptoCurrency currency,

@@ -20,6 +20,7 @@ CORE_SRC_FILES = list(map(str, itertools.chain(
     Path(path.join(CORE_ROOT, 'src')).rglob('*.c'),
     Path(path.join(CORE_ROOT, 'vendor', 'ed25519')).rglob('*.c')
 )))
+CYTHON_FILES = list(map(str, Path(path.join(HERE, 'walletkit')).glob('*.pyx')))
 CYTHON_INCLUDE_DIRS = [path.join(HERE, 'walletkit')]
 INCLUDE_DIRS = [
     path.join(CORE_ROOT, 'src'),
@@ -28,7 +29,7 @@ INCLUDE_DIRS = [
     path.join(CORE_ROOT, 'vendor', 'secp256k1'),
 ]
 EXTENSIONS = [Extension(
-    'native', [path.join(HERE, 'walletkit', 'native.pyx')] + CORE_SRC_FILES,
+    'native', CYTHON_FILES + CORE_SRC_FILES,
     include_dirs=INCLUDE_DIRS,
     libraries=LIBRARIES,
     extra_compile_args=[
