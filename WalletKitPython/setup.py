@@ -7,8 +7,12 @@ from setuptools import Extension
 from distutils.core import setup
 from Cython.Build import cythonize
 
+LIBRARIES = ["resolv"]
+
 if platform.system() == 'Darwin':
     os.environ['LDFLAGS'] = '-framework Security'
+if platform.system() == 'Linux':
+    LIBRARIES += ["bsd", "sqlite3"]
 
 HERE = path.dirname(path.abspath(__file__))
 CORE_ROOT = path.abspath(path.join(HERE, path.pardir, 'WalletKitCore'))
@@ -26,7 +30,7 @@ INCLUDE_DIRS = [
 EXTENSIONS = [Extension(
     'native', [path.join(HERE, 'walletkit', 'native.pyx')] + CORE_SRC_FILES,
     include_dirs=INCLUDE_DIRS,
-    libraries=["resolv"],
+    libraries=LIBRARIES,
     extra_compile_args=[
         "-Wall",
         "-Wconversion",
