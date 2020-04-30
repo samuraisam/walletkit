@@ -1,5 +1,5 @@
 from core cimport *
-from python cimport PyUnicode_AsUTF8, PyUnicode_FromString
+from python cimport PyUnicode_AsUTF8, PyUnicode_FromString, PyBytes_FromStringAndSize
 from libc.stdlib cimport malloc, free
 from time import time_ns
 from typing import List, Tuple
@@ -33,6 +33,13 @@ cdef class AccountBase:
     cdef BRCryptoAccount native(self):
         return self._account
 
+    def serialize(self) -> bytes:
+        cdef size_t bytes_count = 0
+        cdef uint8_t *ret_bytes = cryptoAccountSerialize(self._account, &bytes_count)
+        return PyBytes_FromStringAndSize(<char *>ret_bytes, bytes_count)
+
+    def uids(self) -> str:
+        return PyUnicode_FromString(cryptoAccountGetUids(self._account))
 
 class Account:
     @classmethod
@@ -46,7 +53,7 @@ class Account:
 
     @classmethod
     def create_from_serialization(cls, data: bytes, uids: str) -> AccountBase:
-        cdef BRCryptoAccount account = cryptoAccountCreateFromSerialization(data, len(data), uids)
+        cdef BRCryptoAccount account = cryptoAccountCreateFromSerialization(data, len(data), uids.encode('UTF-8'))
         if account == NULL:
             raise MemoryError
         ret = AccountBase()

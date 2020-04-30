@@ -36,6 +36,7 @@ INCLUDE_DIRS = [
     path.join(CORE_ROOT, 'vendor'),
     path.join(CORE_ROOT, 'vendor', 'secp256k1'),
 ]
+EXTENSIONS = ['native']
 
 setup(
     name='walletkit',
@@ -53,10 +54,10 @@ setup(
     ext_package='walletkit',
     ext_modules=cythonize([
         Extension(
-            'native', CYTHON_FILES,
+            ext_mod, [path.join(HERE, 'walletkit', f'{ext_mod}.pyx')],
             include_dirs=INCLUDE_DIRS,
             libraries=["walletkitcore"] + LIBRARIES
-        )],
+        ) for ext_mod in EXTENSIONS],
         include_path=CYTHON_INCLUDE_DIRS,
         language_level=3
     ),

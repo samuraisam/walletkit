@@ -23,6 +23,21 @@ class TestAccount(unittest.TestCase):
         account = Account.create_from_phrase(phrase, ms_timestamp, str(uuid.uuid4()))
         self.assertIsNotNone(account)
 
+    def test_account_serialize(self):
+        phrase, ms_timestamp = Account.generate_phrase(english.words)
+        account = Account.create_from_phrase(phrase, ms_timestamp, str(uuid.uuid4()))
+        serialized = account.serialize()
+        self.assertIsNotNone(serialized)
+        self.assertTrue(len(serialized) > 2)
+
+    def test_account_serialize_round_trip(self):
+        phrase, ms_timestamp = Account.generate_phrase(english.words)
+        account = Account.create_from_phrase(phrase, ms_timestamp, str(uuid.uuid4()))
+        serialized = account.serialize()
+        deserialized = Account.create_from_serialization(serialized, str(uuid.uuid4()))
+        reserialized = deserialized.serialize()
+        self.assertEqual(len(serialized), len(reserialized))
+
 
 class TestHasher(unittest.TestCase):
     def test_do_hash(self):
