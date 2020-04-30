@@ -1,5 +1,4 @@
-from libc.stdint cimport uint8_t, uint32_t, uint64_t, int64_t
-from libc.stddef cimport size_t
+from libc.stdint cimport uint8_t, uint16_t, uint32_t, uint64_t, int64_t
 
 
 cdef extern from "BRCryptoBase.h":
@@ -26,7 +25,13 @@ cdef extern from "BRCryptoBase.h":
 
     ctypedef size_t BRCryptoCount
 
-    ctypedef void* BRCryptoCookie
+    ctypedef void*BRCryptoCookie
+
+    ctypedef struct BRCryptoData32:
+        uint8_t data[32]
+
+    ctypedef struct BRCryptoData16:
+        uint8_t data[16]
 
 
 cdef extern from "BRCryptoSync.h":
@@ -659,6 +664,124 @@ cdef extern from "BRCryptoWallet.h":
     BRCryptoWalletSweeperStatus cryptoWalletSweeperValidate(BRCryptoWalletSweeper sweeper)
 
 
+cdef extern from "BRCryptoPeer.h":
+    ctypedef struct BRCryptoPeerRecord:
+        pass
+
+    ctypedef BRCryptoPeerRecord *BRCryptoPeer
+
+
+cdef extern from "BRCryptoWalletManagerClient.h":
+    ctypedef void *BRCryptoClientContext
+
+    ctypedef struct BRCryptoClientCallbackStateRecord:
+        pass
+
+    ctypedef BRCryptoClientCallbackStateRecord *BRCryptoClientCallbackState;
+
+    ctypedef void (*BRCryptoClientGetBlockNumberCallback)(BRCryptoClientContext context,
+                                                          BRCryptoWalletManager manager,
+                                                          BRCryptoClientCallbackState callbackState)
+
+    void cwmAnnounceGetBlockNumberSuccess(BRCryptoWalletManager cwm,
+                                          BRCryptoClientCallbackState callbackState,
+                                          uint64_t blockNumber)
+
+    void cwmAnnounceGetBlockNumberFailure(BRCryptoWalletManager cwm,
+                                          BRCryptoClientCallbackState callbackState)
+
+    ctypedef void (*BRCryptoClientGetTransactionsCallback)(BRCryptoClientContext context,
+                                                           BRCryptoWalletManager manager,
+                                                           BRCryptoClientCallbackState callbackState,
+                                                           const char ** addresses,
+                                                           size_t addressCount,
+                                                           const char *currency,
+                                                           uint64_t begBlockNumber,
+                                                           uint64_t endBlockNumber)
+
+    void cwmAnnounceGetTransactionsItem(BRCryptoWalletManager cwm,
+                                        BRCryptoClientCallbackState callbackState,
+                                        BRCryptoTransferStateType status,
+                                        uint8_t *transaction,
+                                        size_t transactionLength,
+                                        uint64_t timestamp,
+                                        uint64_t blockHeight)
+
+    void cwmAnnounceGetTransactionsComplete(BRCryptoWalletManager cwm,
+                                            BRCryptoClientCallbackState callbackState,
+                                            BRCryptoBoolean success)
+
+    ctypedef void (*BRCryptoClientGetTransfersCallback)(BRCryptoClientContext context,
+                                                        BRCryptoWalletManager manager,
+                                                        BRCryptoClientCallbackState callbackState,
+                                                        const char ** addresses,
+                                                        size_t addressCount,
+                                                        const char *currency,
+                                                        uint64_t begBlockNumber,
+                                                        uint64_t endBlockNumber);
+
+    void cwmAnnounceGetTransferItem(BRCryptoWalletManager cwm,
+                                    BRCryptoClientCallbackState callbackState,
+                                    BRCryptoTransferStateType status,
+                                    const char *hash,
+                                    const char *uids,
+                                    const char *from_,
+                                    const char *to,
+                                    const char *amount,
+                                    const char *currency,
+                                    const char *fee,
+                                    uint64_t blockTimestamp,
+                                    uint64_t blockNumber,
+                                    uint64_t blockConfirmations,
+                                    uint64_t blockTransactionIndex,
+                                    const char *blockHash,
+                                    size_t attributesCount,
+                                    const char ** attributeKeys,
+                                    const char ** attributeVals)
+
+    void cwmAnnounceGetTransfersComplete(BRCryptoWalletManager cwm,
+                                         BRCryptoClientCallbackState callbackState,
+                                         BRCryptoBoolean success)
+
+    ctypedef void (*BRCryptoClientSubmitTransactionCallback)(BRCryptoClientContext context,
+                                                             BRCryptoWalletManager manager,
+                                                             BRCryptoClientCallbackState callbackState,
+                                                             const uint8_t *transaction,
+                                                             size_t transactionLength,
+                                                             const char *hashAsHex)
+
+    void cwmAnnounceSubmitTransferSuccess(BRCryptoWalletManager cwm,
+                                          BRCryptoClientCallbackState callbackState,
+                                          const char *hash)
+
+    void cwmAnnounceSubmitTransferFailure(BRCryptoWalletManager cwm,
+                                          BRCryptoClientCallbackState callbackState)
+
+    ctypedef void (*BRCryptoClientEstimateTransactionFeeCallback)(BRCryptoClientContext context,
+                                                                  BRCryptoWalletManager manager,
+                                                                  BRCryptoClientCallbackState callbackState,
+                                                                  const uint8_t *transaction,
+                                                                  size_t transactionLength,
+                                                                  const char *hashAsHex)
+
+    void cwmAnnounceEstimateTransactionFeeSuccess(BRCryptoWalletManager cwm,
+                                                  BRCryptoClientCallbackState callbackState,
+                                                  const char *hash,
+                                                  uint64_t costUnits)
+
+    void cwmAnnounceEstimateTransactionFeeFailure(BRCryptoWalletManager cwm,
+                                                  BRCryptoClientCallbackState callbackState,
+                                                  const char *hash)
+
+    ctypedef struct BRCryptoClient:
+        BRCryptoClientContext context
+        BRCryptoClientGetBlockNumberCallback funcGetBlockNumber
+        BRCryptoClientGetTransactionsCallback funcGetTransactions
+        BRCryptoClientGetTransfersCallback funcGetTransfers
+        BRCryptoClientSubmitTransactionCallback funcSubmitTransaction
+        BRCryptoClientEstimateTransactionFeeCallback funcEstimateTransactionFee
+
+
 cdef extern from "BRCryptoWalletManager.h":
     ctypedef enum BRCryptoWalletManagerDisconnectReasonType:
         CRYPTO_WALLET_MANAGER_DISCONNECT_REASON_REQUESTED,
@@ -763,3 +886,179 @@ cdef extern from "BRCryptoWalletManager.h":
         BRCryptoCWMListenerWalletManagerEvent walletManagerEventCallback
         BRCryptoCWMListenerWalletEvent walletEventCallback
         BRCryptoCWMListenerTransferEvent transferEventCallback
+
+    BRCryptoWalletManager cryptoWalletManagerCreate(BRCryptoCWMListener listener,
+                                                    BRCryptoClient client,
+                                                    BRCryptoAccount account,
+                                                    BRCryptoNetwork network,
+                                                    BRCryptoSyncMode mode,
+                                                    BRCryptoAddressScheme scheme,
+                                                    const char *path)
+
+    BRCryptoNetwork cryptoWalletManagerGetNetwork(BRCryptoWalletManager cwm)
+
+    BRCryptoAccount cryptoWalletManagerGetAccount(BRCryptoWalletManager cwm)
+
+    BRCryptoSyncMode cryptoWalletManagerGetMode(BRCryptoWalletManager cwm)
+
+    void cryptoWalletManagerSetMode(BRCryptoWalletManager cwm, BRCryptoSyncMode mode)
+
+    BRCryptoWalletManagerState cryptoWalletManagerGetState(BRCryptoWalletManager cwm)
+
+    BRCryptoAddressScheme cryptoWalletManagerGetAddressScheme(BRCryptoWalletManager cwm)
+
+    void cryptoWalletManagerSetAddressScheme(BRCryptoWalletManager cwm,
+                                             BRCryptoAddressScheme scheme)
+
+    const char *cryptoWalletManagerGetPath(BRCryptoWalletManager cwm)
+
+    void cryptoWalletManagerSetNetworkReachable(BRCryptoWalletManager cwm,
+                                                BRCryptoBoolean isNetworkReachable)
+
+    BRCryptoBoolean cryptoWalletManagerHasWallet(BRCryptoWalletManager cwm,
+                                                 BRCryptoWallet wallet)
+
+    BRCryptoWallet cryptoWalletManagerGetWallet(BRCryptoWalletManager cwm)
+
+    void cryptoWalletManagerAddWallet(BRCryptoWalletManager cwm,
+                                      BRCryptoWallet wallet)
+
+    void cryptoWalletManagerRemWallet(BRCryptoWalletManager cwm,
+                                      BRCryptoWallet wallet)
+
+    BRCryptoWallet *cryptoWalletManagerGetWallets(BRCryptoWalletManager cwm,
+                                                  size_t *count)
+
+    BRCryptoWallet cryptoWalletManagerGetWalletForCurrency(BRCryptoWalletManager cwm,
+                                                           BRCryptoCurrency currency)
+
+    BRCryptoWallet cryptoWalletManagerRegisterWallet(BRCryptoWalletManager cwm,
+                                                     BRCryptoCurrency currency)
+
+    void cryptoWalletManagerStop(BRCryptoWalletManager cwm)
+
+    void cryptoWalletManagerConnect(BRCryptoWalletManager cwm,
+                                    BRCryptoPeer peer)
+
+    void cryptoWalletManagerDisconnect(BRCryptoWalletManager cwm)
+
+    void cryptoWalletManagerSync(BRCryptoWalletManager cwm)
+
+    void cryptoWalletManagerSyncToDepth(BRCryptoWalletManager cwm,
+                                        BRCryptoSyncDepth depth)
+
+    BRCryptoTransfer cryptoWalletManagerCreateTransfer(BRCryptoWalletManager cwm,
+                                                       BRCryptoWallet wallet,
+                                                       BRCryptoAddress target,
+                                                       BRCryptoAmount amount,
+                                                       BRCryptoFeeBasis estimatedFeeBasis,
+                                                       size_t attributesCount,
+                                                       BRCryptoTransferAttribute *attributes)
+
+    BRCryptoTransfer cryptoWalletManagerCreateTransferMultiple(BRCryptoWalletManager cwm,
+                                                               BRCryptoWallet wallet,
+                                                               size_t outputsCount,
+                                                               BRCryptoTransferOutput *outputs,
+                                                               BRCryptoFeeBasis estimatedFeeBasis)
+
+    BRCryptoBoolean cryptoWalletManagerSign(BRCryptoWalletManager cwm,
+                                            BRCryptoWallet wallet,
+                                            BRCryptoTransfer transfer,
+                                            const char *paperKey)
+
+    void cryptoWalletManagerSubmit(BRCryptoWalletManager cwm,
+                                   BRCryptoWallet wid,
+                                   BRCryptoTransfer tid,
+                                   const char *paperKey)
+
+    void cryptoWalletManagerSubmitForKey(BRCryptoWalletManager cwm,
+                                         BRCryptoWallet wallet,
+                                         BRCryptoTransfer transfer,
+                                         BRCryptoKey key)
+
+    void cryptoWalletManagerSubmitSigned(BRCryptoWalletManager cwm,
+                                         BRCryptoWallet wallet,
+                                         BRCryptoTransfer transfer)
+
+    BRCryptoAmount cryptoWalletManagerEstimateLimit(BRCryptoWalletManager manager,
+                                                    BRCryptoWallet  wallet,
+                                                    BRCryptoBoolean asMaximum,
+                                                    BRCryptoAddress target,
+                                                    BRCryptoNetworkFee fee,
+                                                    BRCryptoBoolean *needEstimate,
+                                                    BRCryptoBoolean *isZeroIfInsuffientFunds)
+
+    void cryptoWalletManagerEstimateFeeBasis(BRCryptoWalletManager manager,
+                                             BRCryptoWallet  wallet,
+                                             BRCryptoCookie cookie,
+                                             BRCryptoAddress target,
+                                             BRCryptoAmount  amount,
+                                             BRCryptoNetworkFee fee)
+
+    void cryptoWalletManagerEstimateFeeBasisForWalletSweep(BRCryptoWalletManager manager,
+                                                           BRCryptoWallet wallet,
+                                                           BRCryptoCookie cookie,
+                                                           BRCryptoWalletSweeper sweeper,
+                                                           BRCryptoNetworkFee fee)
+
+    void cryptoWalletManagerEstimateFeeBasisForPaymentProtocolRequest(BRCryptoWalletManager manager,
+                                                                      BRCryptoWallet wallet,
+                                                                      BRCryptoCookie cookie,
+                                                                      BRCryptoPaymentProtocolRequest request,
+                                                                      BRCryptoNetworkFee fee)
+
+    void cryptoWalletManagerWipe(BRCryptoNetwork network,
+                                 const char *path)
+
+    BRCryptoWalletManager cryptoWalletManagerTake(BRCryptoWalletManager instance)
+    BRCryptoWalletManager cryptoWalletManagerTakeWeak(BRCryptoWalletManager instance)
+    void cryptoWalletManagerGive(BRCryptoWalletManager instance)
+
+    ctypedef struct BRCryptoWalletMigratorRecord:
+        pass
+
+    ctypedef BRCryptoWalletMigratorRecord *BRCryptoWalletMigrator
+
+    ctypedef enum BRCryptoWalletMigratorStatusType:
+        CRYPTO_WALLET_MIGRATOR_SUCCESS,
+        CRYPTO_WALLET_MIGRATOR_ERROR_TRANSACTION,
+        CRYPTO_WALLET_MIGRATOR_ERROR_BLOCK,
+        CRYPTO_WALLET_MIGRATOR_ERROR_PEER
+
+    ctypedef struct BRCryptoWalletMigratorStatus:
+        BRCryptoWalletMigratorStatusType type
+
+    BRCryptoWalletMigrator cryptoWalletMigratorCreate(BRCryptoNetwork network,
+                                                      const char *storagePath)
+
+    void cryptoWalletMigratorRelease(BRCryptoWalletMigrator migrator)
+
+    BRCryptoWalletMigratorStatus cryptoWalletMigratorHandleTransactionAsBTC(BRCryptoWalletMigrator migrator,
+                                                                            const uint8_t *bytes,
+                                                                            size_t bytesCount,
+                                                                            uint32_t blockHeight,
+                                                                            uint32_t timestamp)
+
+    BRCryptoWalletMigratorStatus cryptoWalletMigratorHandleBlockAsBTC(BRCryptoWalletMigrator migrator,
+                                                                      BRCryptoData32 hash,
+                                                                      uint32_t height,
+                                                                      uint32_t nonce,
+                                                                      uint32_t target,
+                                                                      uint32_t txCount,
+                                                                      uint32_t version,
+                                                                      uint32_t timestamp,
+                                                                      uint8_t *flags, size_t flagsLen,
+                                                                      BRCryptoData32 *hashes, size_t hashesCount,
+                                                                      BRCryptoData32 merkleRoot,
+                                                                      BRCryptoData32 prevBlock)
+
+    BRCryptoWalletMigratorStatus cryptoWalletMigratorHandleBlockBytesAsBTC(BRCryptoWalletMigrator migrator,
+                                                                           const uint8_t *bytes,
+                                                                           size_t bytesCount,
+                                                                           uint32_t height)
+
+    BRCryptoWalletMigratorStatus cryptoWalletMigratorHandlePeerAsBTC(BRCryptoWalletMigrator migrator,
+                                                                     uint32_t address,
+                                                                     uint16_t port,
+                                                                     uint64_t services,
+                                                                     uint32_t timestamp)
