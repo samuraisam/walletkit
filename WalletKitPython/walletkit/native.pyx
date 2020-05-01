@@ -5,7 +5,7 @@ from asyncio import get_event_loop, new_event_loop, set_event_loop
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 from time import time_ns
-from typing import List, Tuple
+from typing import List, Tuple, Callable
 from enum import Enum
 from .model import BlockchainClient
 
@@ -50,12 +50,12 @@ cdef class GetBlockHeightJob:
     cdef BRCryptoWalletManager _manager
     cdef BRCryptoClientCallbackState _callback_state
     cdef object _blockchain_id
-    cdef object _network_client
+    cdef object _network_client_factory
 
     def run_job(self):
         try:
-            block_height = get_event_loop().run_until_complete(
-                self._network_client.get_block_height(self._blockchain_id))
+            network_client = self._network_client_factory()
+            block_height = get_event_loop().run_until_complete(network_client.get_block_height(self._blockchain_id))
             cwmAnnounceGetBlockNumberSuccess(self._manager, self._callback_state, PyLong_AsLong(block_height))
         except:
             cwmAnnounceGetBlockNumberFailure(self._manager, self._callback_state)
@@ -70,12 +70,13 @@ cdef class GetTransactionsJob:
     cdef object _currency
     cdef object _start_block
     cdef object _end_block
-    cdef object _network_client
+    cdef object _network_client_factory
 
     def run_job(self):
         try:
+            network_client = self._network_client_factory()
             transactions = get_event_loop().run_until_complete(
-                self._network_client.get_raw_transactions(
+                network_client.get_raw_transactions(
                     self._blockchain_id, self._addresses, self._currency,
                     self._start_block, self._end_block
                 ))
@@ -97,7 +98,7 @@ cdef class GetTransactionsJob:
 
 cdef class CryptoClient:
     cdef BRCryptoClient _client
-    cdef object _network_client
+    cdef object _network_client_factory
 
     cdef BRCryptoClient native(self):
         return self._client
@@ -112,7 +113,7 @@ cdef class CryptoClient:
         job._manager = manager
         job._callback_state = callback_state
         job._blockchain_id = blockchain_id
-        job._network_client = self._network_client
+        job._network_client_factory = self._network_client_factory
         executor.submit(job.run_job)
 
     cdef void get_transactions(self, BRCryptoWalletManager manager,
@@ -139,7 +140,7 @@ cdef class CryptoClient:
         job._currency = currency_id
         job._start_block = start_block_number
         job._end_block = end_block_number
-        job._network_client = self._network_client
+        job._network_client_factory = self._network_client_factory
         executor.submit(job.run_job)
 
     cdef void get_transfers(self, BRCryptoWalletManager manager,
@@ -373,7 +374,7 @@ class WalletManager:
     @staticmethod
     def create(account: AccountBase,
                network: NetworkBase,
-               blockchain_client: BlockchainClient,
+               blockchain_client_factory: Callable[[], BlockchainClient],
                sync_mode: SyncMode,
                address_scheme: AddressScheme,
                storage_path: str) -> WalletManagerBase:
@@ -396,7 +397,7 @@ class WalletManager:
         ccli_native.funcSubmitTransaction = <BRCryptoClientSubmitTransactionCallback> ccli.submit_transaction
         ccli_native.funcEstimateTransactionFee = <BRCryptoClientEstimateTransactionFeeCallback> ccli.estimate_transaction_fee
         ccli._client = ccli_native
-        ccli._network_client = blockchain_client
+        ccli._network_client_factory = blockchain_client_factory
 
         cwm_native = cryptoWalletManagerCreate(
             cwml_native,

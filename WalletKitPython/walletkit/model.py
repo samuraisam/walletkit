@@ -1,27 +1,14 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import List
 
 
-class RawTransaction(ABC):
-    @property
-    @abstractmethod
-    def status(self) -> str:
-        pass
-
-    @property
-    @abstractmethod
-    def timestamp(self) -> str:
-        pass
-
-    @property
-    @abstractmethod
-    def block_height(self) -> int:
-        pass
-
-    @property
-    @abstractmethod
-    def data(self) -> bytes:
-        pass
+@dataclass
+class RawTransaction:
+    status: str
+    timestamp: int
+    block_height: int
+    data: bytes
 
 
 class BlockchainClient(ABC):

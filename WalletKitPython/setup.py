@@ -49,7 +49,8 @@ setup(
     packages=['walletkit', 'walletkit.wordlists'],
     install_requires=[
         'typed-json-dataclass==1.2.1',
-        'httpx==0.12.1'
+        'httpx==0.12.1',
+        'tenacity==6.2.0'
     ],
     setup_requires=[
         'setuptools>=41.6.0',
