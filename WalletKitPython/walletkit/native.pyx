@@ -39,6 +39,7 @@ cdef class CryptoWalletListener:
         cryptoWalletGive(wallet)
         cryptoTransferGive(transfer)
 
+# TODO: this should not be global
 def executor_initializer():
     event_loop = new_event_loop()
     set_event_loop(event_loop)
