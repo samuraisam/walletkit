@@ -565,6 +565,8 @@ cdef extern from "BRCryptoWallet.h":
         BRCryptoWalletEventType type
         _cryptoWalletEvent u
 
+    const char * cryptoWalletEventTypeString(BRCryptoWalletEventType t)
+
     ctypedef struct BRCryptoWalletSweeperRecord:
         pass
 
@@ -857,7 +859,10 @@ cdef extern from "BRCryptoWalletManager.h":
         _walletManagerEventSyncBlockHeight blockHeight
 
     ctypedef struct BRCryptoWalletManagerEvent:
+        BRCryptoWalletManagerEventType type
         _walletManagerEvent u
+
+    const char *cryptoWalletManagerEventTypeString(BRCryptoWalletManagerEventType t)
 
     ctypedef void *BRCryptoCWMListenerContext;
 
