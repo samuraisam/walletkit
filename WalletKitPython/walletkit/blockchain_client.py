@@ -43,7 +43,7 @@ class BlocksetBlockchainClient(BlockchainClient):
         buckets = [[]]
         for addr in addresses:
             cur_bucket_size += len(addr)
-            if cur_bucket_size > 1500:
+            if cur_bucket_size > 1900:
                 buckets.append([])
                 cur_bucket_size = 0
             buckets[-1].append(addr)

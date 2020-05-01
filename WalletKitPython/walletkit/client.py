@@ -18,8 +18,8 @@ class BlocksetError(BaseException):
 logger = logging.getLogger(__name__)
 default_retry = retry(wait=wait_random_exponential(1, max=5),
                       stop=stop_after_attempt(5),
-                      retry=retry_if_exception_type(BlocksetError),
-                      before_sleep=before_sleep_log(logger, logging.WARN))
+                      retry=retry_if_exception_type(BlocksetError))
+                      # before_sleep=before_sleep_log(logger, logging.WARN))
 
 
 @dataclass
@@ -123,7 +123,7 @@ class TransactionsPageContent(TypedJsonMixin):
 @dataclass
 class TransactionsPage(TypedJsonMixin):
     _links: Mapping[str, Link]
-    _embedded: Optional[TransactionsPageContent] = None
+    _embedded: TransactionsPageContent
 
     @property
     def transactions(self):
@@ -247,4 +247,7 @@ class Blockset:
                                    headers=self._headers(token))
         self._log(f"GET {resp.url}")
         self._raise_error(resp)
+        json = resp.json()
+        if '_embedded' not in json:
+            return TransactionsPage(_links=json['_links'], _embedded=TransactionsPageContent([]))
         return TransactionsPage.from_dict(resp.json())

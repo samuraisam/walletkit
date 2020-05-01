@@ -142,8 +142,16 @@ class TestWalletManager(unittest.TestCase):
         return temp_dir
 
     def test_create(self):
-        network = Network.install_builtins()[0]
-        account = Account.generate(english.words)
+        network = Network.find_builtin('bitcoin-testnet')
+        phrase_from_env = os.getenv('WALLETKIT_PHRASE')
+        if phrase_from_env is not None:
+            print('using phrase from environment')
+            timestamp = 1588319433
+            uids = '3655ed8c-98b3-45ba-be66-d2e7682e2e63'
+            account = Account.create_from_phrase(phrase_from_env, timestamp, uids)
+        else:
+            print('generating new phrase')
+            account = Account.generate(english.words)
         listener = EventAccumulatingListener()
         wallet_manager = WalletManager.create(account=account, network=network,
                                               blockchain_client_factory=self.blockset_blockchain_client_factory,
@@ -158,7 +166,7 @@ class TestWalletManager(unittest.TestCase):
         for i in range(100):
             was_stopped = listener.was_stopped()
             events = listener.read_wallet_manager_events()
-            print(f"\n\ntick {i} events={events}\n\n")
+            print(f"events={events}")
             if was_stopped:
                 break
             time.sleep(1)

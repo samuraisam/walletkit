@@ -1,5 +1,7 @@
 from core cimport *
-from python cimport Py_INCREF, PyUnicode_AsUTF8, PyUnicode_FromString, PyBytes_FromStringAndSize, PyLong_AsLong
+from python cimport Py_INCREF, PyUnicode_AsUTF8, PyUnicode_FromString, PyBytes_FromStringAndSize
+from python cimport PyLong_AsLong, PyLong_AsSize_t
+from libc.stdio cimport printf
 from libc.stdlib cimport malloc, free
 from asyncio import get_event_loop, new_event_loop, set_event_loop
 from concurrent.futures import ThreadPoolExecutor
@@ -10,6 +12,10 @@ from enum import Enum
 from .model import BlockchainClient, WalletManagerListener
 from .model import (WalletManagerEventType, WalletManagerStateEvent, WalletManagerWalletEvent, WalletManagerSyncEvent,
                     WalletManagerBlockHeightEvent, WalletManagerSyncStoppedReason)
+
+cdef extern from "stdlib.h":
+    void exit(int status)
+
 
 cdef class CryptoWalletListener:
     cdef BRCryptoCWMListener _listener
@@ -83,7 +89,8 @@ cdef class GetBlockHeightJob:
             network_client = self._network_client_factory()
             block_height = get_event_loop().run_until_complete(network_client.get_block_height(self._blockchain_id))
             cwmAnnounceGetBlockNumberSuccess(self._manager, self._callback_state, PyLong_AsLong(block_height))
-        except:
+        except Exception as e:
+            printf("[GetBlockHeightJob] error: %s", PyUnicode_AsUTF8(str(e)))
             cwmAnnounceGetBlockNumberFailure(self._manager, self._callback_state)
         finally:
             cryptoWalletManagerGive(self._manager)
@@ -112,12 +119,13 @@ cdef class GetTransactionsJob:
                     self._callback_state,
                     TransferStatus.from_network_status(tx.status).value,
                     tx.data,
-                    len(tx.data),
-                    tx.timestamp,
-                    tx.block_height
+                    PyLong_AsSize_t(len(tx.data)),
+                    PyLong_AsLong(tx.timestamp),
+                    PyLong_AsLong(tx.block_height)
                 )
             cwmAnnounceGetTransactionsComplete(self._manager, self._callback_state, CRYPTO_TRUE)
-        except:
+        except Exception as e:
+            printf("[GetTransactionsJob] error: %s", PyUnicode_AsUTF8(str(e)))
             cwmAnnounceGetTransactionsComplete(self._manager, self._callback_state, CRYPTO_FALSE)
         finally:
             cryptoWalletManagerGive(self._manager)
@@ -246,6 +254,14 @@ cdef class NetworkBase:
 
 
 class Network:
+    @staticmethod
+    def find_builtin(uids: str) -> NetworkBase:
+        cdef BRCryptoNetwork network = cryptoNetworkFindBuiltin(PyUnicode_AsUTF8(uids))
+        if network is not NULL:
+            obj = NetworkBase()
+            obj._network = network
+            return obj
+
     @staticmethod
     def install_builtins() -> List[NetworkBase]:
         cdef size_t networks_count = 0

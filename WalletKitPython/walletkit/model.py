@@ -12,6 +12,17 @@ class RawTransaction:
     data: bytes
 
 
+class BlockchainClient(ABC):
+    @abstractmethod
+    async def get_block_height(self, blockchain_id: str) -> int:
+        pass
+
+    @abstractmethod
+    async def get_raw_transactions(self, blockchain_id: str, addresses: List[str], currency: str,
+                                   start_block_height: int, end_block_height: int) -> List[RawTransaction]:
+        pass
+
+
 class WalletManagerEventType(Enum):
     CREATED = 0
     CHANGED = 1
@@ -122,17 +133,6 @@ class TransferEventType(Enum):
 class TransferEvent:
     type: TransferEventType
     # TODO: state.old/state.new...
-
-
-class BlockchainClient(ABC):
-    @abstractmethod
-    async def get_block_height(self, blockchain_id: str) -> int:
-        pass
-
-    @abstractmethod
-    async def get_raw_transactions(self, blockchain_id: str, addresses: List[str], currency: str,
-                                   start_block_height: int, end_block_height: int) -> List[RawTransaction]:
-        pass
 
 
 class WalletManagerListener(ABC):
