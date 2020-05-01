@@ -477,6 +477,42 @@ cdef class CurrencyBase:
     def __repr__(self):
         return f"<Currency: name={self.name} code={self.code}>"
 
+cdef class AddressBase:
+    cdef BRCryptoAddress _address
+
+    def __str__(self):
+        return PyUnicode_FromString(cryptoAddressAsString(self._address))
+
+
+cdef class TransferBase:
+    cdef BRCryptoTransfer _transfer
+
+    @property
+    def source_address(self):
+        cdef BRCryptoAddress caddress = cryptoTransferGetSourceAddress(self._transfer)
+        obj = AddressBase()
+        obj._address = caddress
+        return obj
+
+    @property
+    def target_address(self):
+        cdef BRCryptoAddress caddress = cryptoTransferGetTargetAddress(self._transfer)
+        obj = AddressBase()
+        obj._address = caddress
+        return obj
+
+    @property
+    def amount(self):
+        cdef BRCryptoAmount camount = cryptoTransferGetAmount(self._transfer)
+        obj = CryptoAmountBase()
+        obj._amount = camount
+        return obj
+
+    def __str__(self):
+        # return f"{self.source_address}->{self.target_address}"
+        return f"xfer amount={self.amount}"
+
+
 cdef class WalletBase:
     cdef BRCryptoWallet _wallet
 
@@ -505,8 +541,35 @@ cdef class WalletBase:
         obj._fee_basis = basis
         return obj
 
+    def address(self, scheme: AddressScheme) -> AddressBase:
+        cdef BRCryptoAddress address = cryptoWalletGetAddress(self._wallet, scheme.value)
+        obj = AddressBase()
+        obj._address = address
+        return obj
+
+    @property
+    def address_default_scheme(self):
+        return self.address(AddressScheme.GEN_DEFAULT)
+
+    def create_transfer(self, network: NetworkBase, address: AddressBase, amount: int, fee_basis: FeeBasisBase):
+        # cdef BRCryptoAddress caddress = cryptoAddressCreateFromString(network._network, PyUnicode_AsUTF8(address))
+        cdef BRCryptoCurrency currency = cryptoNetworkGetCurrency(network._network)
+        printf("\n\nONE\n\n")
+        cdef BRCryptoUnit cunit = cryptoNetworkGetUnitAsDefault(network._network, currency)
+        printf("\n\nTWO\n\n")
+        cdef BRCryptoAmount camount = cryptoAmountCreateInteger(PyLong_AsLong(amount), cunit)
+        printf("\n\nTHREE\n\n")
+        cdef BRCryptoFeeBasis cbasis = cryptoWalletGetDefaultFeeBasis(self._wallet)
+        printf("\n\nFOUR\n\n")
+        cdef BRCryptoTransfer ctransfer = cryptoWalletCreateTransfer(self._wallet, address._address, camount, cbasis, 0, NULL)
+        printf("\n\nFIVE\n\n")
+        obj = TransferBase()
+        obj._transfer = ctransfer
+        printf("\n\nSIX\n\n")
+        return obj
+
     def __repr__(self):
-        return f"<Wallet: currency={self.currency} default_fee_basis={self.default_fee_basis}>"
+        return f"<Wallet: currency={self.currency} address={self.address_default_scheme} default_fee_basis={self.default_fee_basis}>"
 
 cdef class WalletManagerBase:
     cdef BRCryptoWalletManager _manager
@@ -518,19 +581,26 @@ cdef class WalletManagerBase:
     cdef BRCryptoWalletManager native(self):
         return self._manager
 
+    @property
+    def network(self):
+        cdef BRCryptoNetwork network = cryptoWalletManagerGetNetwork(self._manager)
+        obj = NetworkBase()
+        obj._network = network
+        return obj
+
     def connect(self):
-        cryptoWalletManagerConnect(self._manager, NULL)
+        cryptoWalletManagerConnect(self._manager, NULL)  # TODO: sometimes deadlocks
 
     def disconnect(self):
-        cryptoWalletManagerDisconnect(self._manager)
+        cryptoWalletManagerDisconnect(self._manager)  # TODO: sometimes deadlocks
 
     def sync(self):
-        cryptoWalletManagerSync(self._manager)
+        cryptoWalletManagerSync(self._manager)  # TODO: sometimes deadlocks
 
     def stop(self):
-        cryptoWalletManagerStop(self._manager)
+        cryptoWalletManagerStop(self._manager)  # TODO: sometimes deadlocks
 
-    def set_reachable(self, reachable: bool):
+    def set_reachable(self, reachable: bool):  # TODO: sometimes deadlocks
         cryptoWalletManagerSetNetworkReachable(self._manager, CRYPTO_TRUE if reachable else CRYPTO_FALSE)
 
     def get_wallets(self) -> List[WalletBase]:
@@ -542,6 +612,9 @@ cdef class WalletManagerBase:
             obj._wallet = wallets[i]
             ret.append(obj)
         return ret
+
+    def submit(self, wallet: WalletBase, transfer: TransferBase, paper_key: str):
+        cryptoWalletManagerSubmit(self._manager, wallet._wallet, transfer._transfer, PyUnicode_AsUTF8(paper_key))
 
 
 class WalletManager:

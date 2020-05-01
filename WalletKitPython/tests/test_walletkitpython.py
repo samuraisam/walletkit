@@ -153,15 +153,22 @@ class TestWalletManager(unittest.TestCase):
             print('generating new phrase')
             account = Account.generate(english.words)
         listener = EventAccumulatingListener()
+        print('creating wallet manager')
         wallet_manager = WalletManager.create(account=account, network=network,
                                               blockchain_client_factory=self.blockset_blockchain_client_factory,
                                               sync_mode=SyncMode.API_ONLY, address_scheme=AddressScheme.GEN_DEFAULT,
                                               storage_path=TestWalletManager._get_temp_dir(),
                                               listener=listener)
-        self.assertIsNotNone(wallet_manager)
-        wallet_manager.set_reachable(True)
+        print('wallet manager created')
+        time.sleep(0.01)
+        # wallet_manager.set_reachable(True)  # deadlocks?
+        # print('set reachable = True')
         wallet_manager.sync()
+        time.sleep(0.01)
+        print('started sync')
+        time.sleep(0.01)
         wallet_manager.connect()
+        print('connected')
 
         for i in range(100):
             was_stopped = listener.was_stopped()
@@ -177,7 +184,16 @@ class TestWalletManager(unittest.TestCase):
         for wallet in wallets:
             print(f"wallet {wallet.currency.code} balance={wallet.balance.int_value}")
 
+        time.sleep(0.01)
+        wallet = wallets[0]
+        print(f"createing transfer to {wallet.address(AddressScheme.BTC_SEGWIT)}")
+        xfer = wallet.create_transfer(network, wallet.address(AddressScheme.BTC_SEGWIT), 11000,
+                                      wallet.default_fee_basis)
+        print(f"transfer {xfer}")
+
+        time.sleep(0.01)
         wallet_manager.disconnect()
+        time.sleep(0.01)  # DEADLOCK PROOF
         wallet_manager.stop()
 
         print("done waiting")
