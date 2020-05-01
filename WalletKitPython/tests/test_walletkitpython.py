@@ -12,7 +12,8 @@ from walletkit import Account
 from walletkit import WalletManager, SyncMode, AddressScheme
 from walletkit import client
 from walletkit.blockchain_client import BlocksetBlockchainClient
-from walletkit.model import BlockchainClient, RawTransaction
+from walletkit.model import WalletManagerListener, TransferEvent, WalletEvents, WalletManagerEvents
+from walletkit.model import WalletManagerEventType
 from walletkit import Hasher, HasherType
 from walletkit.wordlists import english
 
@@ -75,6 +76,34 @@ from walletkit.wordlists import english
 #         self.assertEqual(v.hex(), '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824')
 #
 
+
+class EventAccumulatingListener(WalletManagerListener):
+    def __init__(self):
+        self.wallet_manager_events = []
+        self.wallet_events = []
+        self.transfer_events = []
+
+    def received_wallet_manager_event(self, event: WalletManagerEvents):
+        self.wallet_manager_events.append(event)
+
+    def received_wallet_event(self, event: WalletEvents):
+        self.wallet_events.append(event)
+
+    def received_transfer_event(self, event: TransferEvent):
+        self.transfer_events.append(event)
+
+    def read_wallet_manager_events(self) -> List[WalletManagerEvents]:
+        ret = self.wallet_manager_events
+        self.wallet_manager_events = []
+        return ret
+
+    def was_stopped(self):
+        for event in self.wallet_manager_events:
+            if event.type == WalletManagerEventType.SYNC_STOPPED:
+                return True
+        return False
+
+
 class TestWalletManager(unittest.TestCase):
     account: client.Account
 
@@ -115,15 +144,23 @@ class TestWalletManager(unittest.TestCase):
     def test_create(self):
         network = Network.install_builtins()[0]
         account = Account.generate(english.words)
-        wallet_manager = WalletManager.create(account, network, self.blockset_blockchain_client_factory, SyncMode.API_ONLY,
-                                              AddressScheme.GEN_DEFAULT, TestWalletManager._get_temp_dir())
+        listener = EventAccumulatingListener()
+        wallet_manager = WalletManager.create(account=account, network=network,
+                                              blockchain_client_factory=self.blockset_blockchain_client_factory,
+                                              sync_mode=SyncMode.API_ONLY, address_scheme=AddressScheme.GEN_DEFAULT,
+                                              storage_path=TestWalletManager._get_temp_dir(),
+                                              listener=listener)
         self.assertIsNotNone(wallet_manager)
         wallet_manager.set_reachable(True)
         wallet_manager.sync()
         wallet_manager.connect()
 
         for i in range(100):
-            print(f"tick {i}")
+            was_stopped = listener.was_stopped()
+            events = listener.read_wallet_manager_events()
+            print(f"\n\ntick {i} events={events}\n\n")
+            if was_stopped:
+                break
             time.sleep(1)
 
         wallet_manager.disconnect()

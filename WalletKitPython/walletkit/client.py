@@ -122,11 +122,13 @@ class TransactionsPageContent(TypedJsonMixin):
 
 @dataclass
 class TransactionsPage(TypedJsonMixin):
-    _embedded: TransactionsPageContent
     _links: Mapping[str, Link]
+    _embedded: Optional[TransactionsPageContent] = None
 
     @property
     def transactions(self):
+        if self._embedded is None:
+            return []
         return self._embedded.transactions
 
 
@@ -225,11 +227,11 @@ class Blockset:
 
     @default_retry
     async def get_transactions(self, blockchain_id, addresses: List[str] = None, start_height=None, end_height=None,
-                               start_timestamp=None, end_timestamp=None, max_page_size=20, include_proof=False,
+                               start_timestamp=None, end_timestamp=None, max_page_size=None, include_proof=False,
                                include_raw=False, token=None) -> TransactionsPage:
         args = {
             'blockchain_id': blockchain_id,
-            'addresses': addresses,
+            'address': addresses,
             'start_height': start_height,
             'end_height': end_height,
             'start_ts': start_timestamp,
@@ -241,8 +243,8 @@ class Blockset:
         if include_proof:
             args['include_proof'] = True
         args = {k: v for k, v in args.items() if v is not None}
-        self._log(f"get_transactions args={args}")
         resp = await self.http.get(self.endpoint + '/transactions', params=args,
                                    headers=self._headers(token))
+        self._log(f"GET {resp.url}")
         self._raise_error(resp)
         return TransactionsPage.from_dict(resp.json())

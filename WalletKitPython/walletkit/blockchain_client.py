@@ -1,5 +1,6 @@
 import asyncio
 import traceback
+from time import time_ns
 from base64 import b64decode
 from functools import wraps
 from typing import List
@@ -41,20 +42,22 @@ class BlocksetBlockchainClient(BlockchainClient):
         cur_bucket_size = 0
         buckets = [[]]
         for addr in addresses:
-            self.log(f"cur_bucket_size {cur_bucket_size}")
             cur_bucket_size += len(addr)
             if cur_bucket_size > 1500:
                 buckets.append([])
                 cur_bucket_size = 0
             buckets[-1].append(addr)
         # fetch each bucket
-        bucket_lens = [len(b) for b in buckets]
-        self.log(f"get_raw_transactions making {bucket_lens} requests")
+        self.log(f"get_raw_transactions making {len(buckets)} requests")
         transactions = []
         for bucket in buckets:
+            start = time_ns()
             transactions_page = await self.blockset.get_transactions(blockchain_id, addresses=bucket,
                                                                      start_height=start_block_height,
                                                                      end_height=end_block_height, include_raw=True)
+            self.log(f"get_raw_transactions got transaction page in {(time_ns() - start) // 1_000_000}ms "
+                     f"num_addresses={len(bucket)} "
+                     f"num_transactions_retrieved={len(transactions_page.transactions)} ")
             transactions.extend([RawTransaction(status=t.status, timestamp=t.timestamp,
                                                 block_height=t.block_height, data=b64decode(t.raw))
                                  for t in transactions_page.transactions])

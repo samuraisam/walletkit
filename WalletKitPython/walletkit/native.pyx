@@ -7,10 +7,13 @@ from uuid import uuid4
 from time import time_ns
 from typing import List, Tuple, Callable
 from enum import Enum
-from .model import BlockchainClient
+from .model import BlockchainClient, WalletManagerListener
+from .model import (WalletManagerEventType, WalletManagerStateEvent, WalletManagerWalletEvent, WalletManagerSyncEvent,
+                    WalletManagerBlockHeightEvent, WalletManagerSyncStoppedReason)
 
 cdef class CryptoWalletListener:
     cdef BRCryptoCWMListener _listener
+    cdef object _state_listener
 
     cdef BRCryptoCWMListener native(self):
         return self._listener
@@ -19,6 +22,29 @@ cdef class CryptoWalletListener:
                                             BRCryptoWalletManagerEvent event) with gil:
         cdef const char *event_name = cryptoWalletManagerEventTypeString(event.type)
         print(f"Wallet manager event callback event={event_name.decode('utf8')}")
+        if self._state_listener is not None:
+            event_type = WalletManagerEventType(event.type)
+            if (event.type == CRYPTO_WALLET_MANAGER_EVENT_CREATED or
+                    event.type == CRYPTO_WALLET_MANAGER_EVENT_CHANGED or
+                    event.type == CRYPTO_WALLET_MANAGER_EVENT_DELETED):
+                listener_event = WalletManagerStateEvent(event_type)  # TODO: fill out state
+                self._state_listener.received_wallet_manager_event(listener_event)
+            elif (event.type == CRYPTO_WALLET_MANAGER_EVENT_WALLET_ADDED or
+                  event.type == CRYPTO_WALLET_MANAGER_EVENT_WALLET_CHANGED or
+                  event.type == CRYPTO_WALLET_MANAGER_EVENT_WALLET_DELETED):
+                listener_event = WalletManagerWalletEvent(event_type)  # TODO: fill out wallet
+                self._state_listener.received_wallet_manager_event(listener_event)
+            elif (event.type == CRYPTO_WALLET_MANAGER_EVENT_SYNC_STARTED or
+                  event.type == CRYPTO_WALLET_MANAGER_EVENT_SYNC_CONTINUES or
+                  event.type == CRYPTO_WALLET_MANAGER_EVENT_SYNC_STOPPED or
+                  event.type == CRYPTO_WALLET_MANAGER_EVENT_SYNC_RECOMMENDED):
+                listener_event = WalletManagerSyncEvent(event_type)  # TODO: fill out reason/etc
+                if event.type == CRYPTO_WALLET_MANAGER_EVENT_SYNC_STOPPED:
+                    listener_event.reason = WalletManagerSyncStoppedReason(event.u.syncStopped.reason.type)
+                self._state_listener.received_wallet_manager_event(listener_event)
+            elif event.type == CRYPTO_WALLET_MANAGER_EVENT_BLOCK_HEIGHT_UPDATED:
+                listener_event = WalletManagerBlockHeightEvent(event_type)  # TODO: fill out height
+                self._state_listener.received_wallet_manager_event(listener_event)
         cryptoWalletManagerGive(manager)
 
     cdef void wallet_event_callback(self, BRCryptoWalletManager manager,
@@ -307,6 +333,7 @@ class Account:
     @staticmethod
     def generate(words: List[str]) -> AccountBase:
         phrase, ms_timestamp = Account.generate_phrase(words)
+        print(f"phrase is {phrase}")
         return Account.create_from_phrase(phrase, ms_timestamp, str(uuid4()))
 
 
@@ -377,7 +404,8 @@ class WalletManager:
                blockchain_client_factory: Callable[[], BlockchainClient],
                sync_mode: SyncMode,
                address_scheme: AddressScheme,
-               storage_path: str) -> WalletManagerBase:
+               storage_path: str,
+               listener: WalletManagerListener = None) -> WalletManagerBase:
         cwml = CryptoWalletListener()
         cdef BRCryptoCWMListener cwml_native
         cwml_native.context = <BRCryptoCWMListenerContext> cwml
@@ -386,6 +414,8 @@ class WalletManager:
         cwml_native.walletEventCallback = <BRCryptoCWMListenerWalletEvent> cwml.wallet_event_callback
         cwml_native.transferEventCallback = <BRCryptoCWMListenerTransferEvent> cwml.transfer_event_callback
         cwml._listener = cwml_native
+        if listener is not None:
+            cwml._state_listener = listener
 
         ccli = CryptoClient()
         cdef BRCryptoClient ccli_native
