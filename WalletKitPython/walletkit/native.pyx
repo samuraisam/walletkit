@@ -154,7 +154,7 @@ cdef class CryptoClient:
         cdef BRCryptoNetwork network = cryptoWalletManagerGetNetwork(manager)
         cdef const char *network_uids = cryptoNetworkGetUids(network)
         blockchain_id = network_uids.decode('utf8')
-        print(f"[CryptoClient] get_block_number blocchain_id={blockchain_id}")
+        print(f"[CryptoClient] get_block_number blockchain_id={blockchain_id}")
         job = GetBlockHeightJob()
         job._manager = manager
         job._callback_state = callback_state
@@ -433,12 +433,12 @@ cdef class UnitBase:
     def is_compatible_with(self, other: UnitBase) -> bool:
         if not isinstance(other, UnitBase):
             raise ValueError("other must be a Unit object")
-        return CRYPTO_TRUE == cryptoUnitIsCompatible(self._unit, <BRCryptoUnit>other._unit)
+        return CRYPTO_TRUE == cryptoUnitIsCompatible(self._unit, <BRCryptoUnit> other._unit)
 
     def has_currency(self, currency: CurrencyBase) -> bool:
         if not isinstance(currency, CurrencyBase):
             raise ValueError("currency must be a Currency object")
-        return CRYPTO_TRUE == cryptoUnitHasCurrency(self._unit, <BRCryptoCurrency>currency._currency)
+        return CRYPTO_TRUE == cryptoUnitHasCurrency(self._unit, <BRCryptoCurrency> currency._currency)
 
     def __str__(self):
         return self.name
@@ -449,7 +449,7 @@ cdef class UnitBase:
     def __eq__(self, other):
         if not isinstance(other, UnitBase):
             return False
-        return cryptoUnitIsIdentical(self._unit, <BRCryptoUnit>other._unit)
+        return cryptoUnitIsIdentical(self._unit, <BRCryptoUnit> other._unit)
 
 
 class Unit:
@@ -465,11 +465,11 @@ class Unit:
     @staticmethod
     def create(currency: CurrencyBase, code: str, name: str, symbol: str, base: UnitBase, decimals: int):
         obj = UnitBase()
-        obj._unit = cryptoUnitCreate(<BRCryptoCurrency>currency._currency,
+        obj._unit = cryptoUnitCreate(<BRCryptoCurrency> currency._currency,
                                      PyUnicode_AsUTF8(code),
                                      PyUnicode_AsUTF8(name),
                                      PyUnicode_AsUTF8(symbol),
-                                     <BRCryptoUnit>base._unit,
+                                     <BRCryptoUnit> base._unit,
                                      PyLong_AsSize_t(decimals))
         return obj
 
@@ -493,7 +493,7 @@ cdef class CryptoAmountBase:
 
     @property
     def int(self) -> int:
-        cdef const char * amt = cryptoAmountGetStringPrefaced(self._amount, 16, "")
+        cdef const char *amt = cryptoAmountGetStringPrefaced(self._amount, 16, "")
         return int.from_bytes(amt, byteorder='little')
 
     def float(self, as_unit: UnitBase) -> float:
@@ -536,45 +536,45 @@ cdef class CryptoAmountBase:
         if not self.is_compatible(other):
             raise ValueError("incompatible amount")
         obj = CryptoAmountBase()
-        obj._amount = cryptoAmountAdd(<BRCryptoAmount>self._amount, <BRCryptoAmount>other._amount)
+        obj._amount = cryptoAmountAdd(<BRCryptoAmount> self._amount, <BRCryptoAmount> other._amount)
         return obj
 
     def __sub__(self, other) -> CryptoAmountBase:
         if not self.is_compatible(other):
             raise ValueError("incompatible amount")
         obj = CryptoAmountBase()
-        obj._amount = cryptoAmountSub(<BRCryptoAmount>self._amount, <BRCryptoAmount>other._amount)
+        obj._amount = cryptoAmountSub(<BRCryptoAmount> self._amount, <BRCryptoAmount> other._amount)
         return obj
 
     def __eq__(self, other):
         if not isinstance(other, CryptoAmountBase):
             return False
-        return CRYPTO_COMPARE_EQ == cryptoAmountCompare(<BRCryptoAmount>self._amount, <BRCryptoAmount>other._amount)
+        return CRYPTO_COMPARE_EQ == cryptoAmountCompare(<BRCryptoAmount> self._amount, <BRCryptoAmount> other._amount)
 
     def __lt__(self, other):
         if not self.is_compatible(other):
             return False
-        return CRYPTO_COMPARE_LT == cryptoAmountCompare(<BRCryptoAmount>self._amount, <BRCryptoAmount>other._amount)
+        return CRYPTO_COMPARE_LT == cryptoAmountCompare(<BRCryptoAmount> self._amount, <BRCryptoAmount> other._amount)
 
     def __gt__(self, other):
         if not self.is_compatible(other):
             return False
-        return CRYPTO_COMPARE_GT == cryptoAmountCompare(<BRCryptoAmount>self._amount, <BRCryptoAmount>other._amount)
+        return CRYPTO_COMPARE_GT == cryptoAmountCompare(<BRCryptoAmount> self._amount, <BRCryptoAmount> other._amount)
 
     def __ne__(self, other):
         if not isinstance(other, CryptoAmountBase):
             return True
-        return CRYPTO_COMPARE_EQ != cryptoAmountCompare(<BRCryptoAmount>self._amount, <BRCryptoAmount>other._amount)
+        return CRYPTO_COMPARE_EQ != cryptoAmountCompare(<BRCryptoAmount> self._amount, <BRCryptoAmount> other._amount)
 
     def __le__(self, other):
         if not self.is_compatible(other):
             return False
-        return CRYPTO_COMPARE_GT != cryptoAmountCompare(<BRCryptoAmount>self._amount, <BRCryptoAmount>other._amount)
+        return CRYPTO_COMPARE_GT != cryptoAmountCompare(<BRCryptoAmount> self._amount, <BRCryptoAmount> other._amount)
 
     def __gt__(self, other):
         if not self.is_compatible(other):
             return False
-        return CRYPTO_COMPARE_LT != cryptoAmountCompare(<BRCryptoAmount>self._amount, <BRCryptoAmount>other._amount)
+        return CRYPTO_COMPARE_LT != cryptoAmountCompare(<BRCryptoAmount> self._amount, <BRCryptoAmount> other._amount)
 
     def __str__(self):
         return self.format(self.unit)
@@ -638,7 +638,7 @@ cdef class CurrencyBase:
 
     @property
     def issuer(self) -> Optional[str]:
-        cdef const char * issuer = cryptoCurrencyGetIssuer(self._currency)
+        cdef const char *issuer = cryptoCurrencyGetIssuer(self._currency)
         if issuer == NULL:
             return None
         return PyUnicode_FromString(issuer)
@@ -651,7 +651,6 @@ cdef class AddressBase:
 
     def __str__(self):
         return PyUnicode_FromString(cryptoAddressAsString(self._address))
-
 
 cdef class TransferBase:
     cdef BRCryptoTransfer _transfer
@@ -686,7 +685,6 @@ cdef class TransferBase:
 
     def __str__(self):
         return f"{self.source_address}->{self.target_address} {self.amount}"
-
 
 cdef class WalletBase:
     cdef BRCryptoWallet _wallet
@@ -788,8 +786,16 @@ cdef class WalletManagerBase:
             ret.append(obj)
         return ret
 
-    def submit(self, wallet: WalletBase, transfer: TransferBase, paper_key: str):
-        cryptoWalletManagerSubmit(self._manager, wallet._wallet, transfer._transfer, PyUnicode_AsUTF8(paper_key))
+    def sign(self, transfer: TransferBase, paper_key: str):
+        if CRYPTO_TRUE != cryptoWalletManagerSign(self._manager, transfer._wallet, transfer._transfer,
+                                                  PyUnicode_AsUTF8(paper_key)):
+            raise RuntimeError("unable to sign transaction")
+
+    def submit(self, transfer: TransferBase, paper_key: str):
+        cryptoWalletManagerSubmit(self._manager, transfer._wallet, transfer._transfer, PyUnicode_AsUTF8(paper_key))
+
+    def submit_signed(self, transfer: TransferBase):
+        cryptoWalletManagerSubmitSigned(self._manager, transfer._wallet, transfer._transfer)
 
 
 class WalletManager:
