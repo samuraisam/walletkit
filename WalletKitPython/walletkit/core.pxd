@@ -119,6 +119,10 @@ cdef extern from "BRCryptoUnit.h":
 
     ctypedef BRCryptoUnitRecord *BRCryptoUnit
 
+    BRCryptoUnit cryptoUnitCreateAsBase(BRCryptoCurrency currency, const char *code, const char *name,
+                                        const char *symbol)
+    BRCryptoUnit cryptoUnitCreate(BRCryptoCurrency currency, const char *code, const char *name, const char *symbol,
+                                  BRCryptoUnit baseUnit, uint8_t powerOffset)
     const char *cryptoUnitGetUids(BRCryptoUnit unit)
     const char *cryptoUnitGetName(BRCryptoUnit unit)
     const char *cryptoUnitGetSymbol(BRCryptoUnit unit)
@@ -156,7 +160,7 @@ cdef extern from "BRCryptoAmount.h":
     BRCryptoComparison cryptoAmountCompare(BRCryptoAmount a1, BRCryptoAmount a2)
     BRCryptoAmount cryptoAmountAdd(BRCryptoAmount a1, BRCryptoAmount a2)
     BRCryptoAmount cryptoAmountSub(BRCryptoAmount a1, BRCryptoAmount a2)
-    BRCryptoAmount cryptoAmountNegate(BRCryptoAmount amount);
+    BRCryptoAmount cryptoAmountNegate(BRCryptoAmount amount)
     BRCryptoAmount cryptoAmountConvertToUnit(BRCryptoAmount amount, BRCryptoUnit unit)
     double cryptoAmountGetDouble(BRCryptoAmount amount, BRCryptoUnit unit, BRCryptoBoolean *overflow)
     uint64_t cryptoAmountGetIntegerRaw(BRCryptoAmount amount, BRCryptoBoolean *overflow)
@@ -565,7 +569,7 @@ cdef extern from "BRCryptoWallet.h":
         BRCryptoWalletEventType type
         _cryptoWalletEvent u
 
-    const char * cryptoWalletEventTypeString(BRCryptoWalletEventType t)
+    const char *cryptoWalletEventTypeString(BRCryptoWalletEventType t)
 
     ctypedef struct BRCryptoWalletSweeperRecord:
         pass

@@ -20,6 +20,7 @@ CORE_SRC_FILES = list(map(str, itertools.chain(
     Path(path.join(CORE_ROOT, 'vendor', 'ed25519')).rglob('*.c')
 )))
 CORE_COMPILE_ARGS = [
+    "-g",
     "-Wall",
     "-Wconversion",
     "-Wsign-conversion",
@@ -50,7 +51,8 @@ setup(
     install_requires=[
         'typed-json-dataclass==1.2.1',
         'httpx==0.12.1',
-        'tenacity==6.2.0'
+        'tenacity==6.2.0',
+        'babel==2.8.0'
     ],
     setup_requires=[
         'setuptools>=41.6.0',
@@ -60,6 +62,8 @@ setup(
     ext_modules=cythonize([
         Extension(
             ext_mod, [path.join(HERE, 'walletkit', f'{ext_mod}.pyx')],
+            extra_compile_args=["-g"],
+            extra_link_args=["-g"],
             include_dirs=INCLUDE_DIRS,
             libraries=["walletkitcore"] + LIBRARIES
         ) for ext_mod in EXTENSIONS],
@@ -71,7 +75,8 @@ setup(
             'sources': CORE_SRC_FILES,
             'include_dirs': INCLUDE_DIRS,
             'libraries': LIBRARIES,
-            'extra_compile_args': CORE_COMPILE_ARGS
+            'extra_compile_args': CORE_COMPILE_ARGS,
+            'extra_link_args': ["-g"]
         }]
     ],
     zip_safe=False

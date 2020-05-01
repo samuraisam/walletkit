@@ -154,9 +154,11 @@ class TestWalletManager(unittest.TestCase):
             account = Account.generate(english.words)
         listener = EventAccumulatingListener()
         print('creating wallet manager')
-        wallet_manager = WalletManager.create(account=account, network=network,
+        wallet_manager = WalletManager.create(account=account,
+                                              network=network,
                                               blockchain_client_factory=self.blockset_blockchain_client_factory,
-                                              sync_mode=SyncMode.API_ONLY, address_scheme=AddressScheme.GEN_DEFAULT,
+                                              sync_mode=SyncMode.API_ONLY,
+                                              address_scheme=AddressScheme.GEN_DEFAULT,
                                               storage_path=TestWalletManager._get_temp_dir(),
                                               listener=listener)
         print('wallet manager created')
@@ -182,12 +184,12 @@ class TestWalletManager(unittest.TestCase):
         self.assertTrue(len(wallets) > 0)
         print(f"wallets: {wallets}")
         for wallet in wallets:
-            print(f"wallet {wallet.currency.code} balance={wallet.balance.int_value}")
+            print(f"wallet {wallet.currency.code} balance={wallet.balance}")
 
         time.sleep(0.01)
         wallet = wallets[0]
-        print(f"createing transfer to {wallet.address(AddressScheme.BTC_SEGWIT)}")
-        xfer = wallet.create_transfer(network, wallet.address(AddressScheme.BTC_SEGWIT), 11000,
+        print(f"createing transfer to {wallet.address(AddressScheme.GEN_DEFAULT)}")
+        xfer = wallet.create_transfer(network, wallet.address(AddressScheme.GEN_DEFAULT), 11000,
                                       wallet.default_fee_basis)
         print(f"transfer {xfer}")
 

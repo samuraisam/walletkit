@@ -1,14 +1,15 @@
 from core cimport *
 from python cimport Py_INCREF, PyUnicode_AsUTF8, PyUnicode_FromString, PyBytes_FromStringAndSize
-from python cimport PyLong_AsLong, PyLong_AsSize_t, PyLong_FromUnsignedLong
+from python cimport PyLong_AsLong, PyLong_AsSize_t, PyLong_FromUnsignedLong, PyLong_FromSize_t
 from libc.stdio cimport printf
 from libc.stdlib cimport malloc, free
 from asyncio import get_event_loop, new_event_loop, set_event_loop
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 from time import time_ns
-from typing import List, Tuple, Callable
+from typing import List, Tuple, Callable, Optional
 from enum import Enum
+from babel.numbers import format_currency
 from .model import BlockchainClient, WalletManagerListener
 from .model import (WalletManagerEventType, WalletManagerStateEvent, WalletManagerWalletEvent, WalletManagerSyncEvent,
                     WalletManagerBlockHeightEvent, WalletManagerSyncStoppedReason)
@@ -398,12 +399,46 @@ class TransferStatus(Enum):
         return TransferStatus(m[status])
 
 
-cdef class CryptoUnitBase:
+cdef class UnitBase:
     cdef BRCryptoUnit _unit
+
+    @property
+    def currency(self) -> CurrencyBase:
+        obj = CurrencyBase()
+        obj._currency = cryptoUnitGetCurrency(self._unit)
+        return obj
+
+    @property
+    def uids(self) -> str:
+        return PyUnicode_FromString(cryptoUnitGetUids(self._unit))
 
     @property
     def name(self) -> str:
         return PyUnicode_FromString(cryptoUnitGetName(self._unit))
+
+    @property
+    def symbol(self) -> str:
+        return PyUnicode_FromString(cryptoUnitGetSymbol(self._unit))
+
+    @property
+    def base(self) -> UnitBase:
+        obj = UnitBase()
+        obj._unit = cryptoUnitGetBaseUnit(self._unit)
+        return obj
+
+    @property
+    def decimals(self) -> int:
+        return PyLong_FromSize_t(cryptoUnitGetBaseDecimalOffset(self._unit))
+
+    def is_compatible_with(self, other: UnitBase) -> bool:
+        if not isinstance(other, UnitBase):
+            raise ValueError("other must be a Unit object")
+        return CRYPTO_TRUE == cryptoUnitIsCompatible(self._unit, <BRCryptoUnit>other._unit)
+
+    def has_currency(self, currency: CurrencyBase) -> bool:
+        if not isinstance(currency, CurrencyBase):
+            raise ValueError("currency must be a Currency object")
+        return CRYPTO_TRUE == cryptoUnitHasCurrency(self._unit, <BRCryptoCurrency>currency._currency)
 
     def __str__(self):
         return self.name
@@ -411,22 +446,141 @@ cdef class CryptoUnitBase:
     def __repr__(self):
         return f"<Unit: {self.name}>"
 
+    def __eq__(self, other):
+        if not isinstance(other, UnitBase):
+            return False
+        return cryptoUnitIsIdentical(self._unit, <BRCryptoUnit>other._unit)
+
+
+class Unit:
+    @staticmethod
+    def create_base(currency: CurrencyBase, code: str, name: str, symbol: str):
+        obj = UnitBase()
+        obj._unit = cryptoUnitCreateAsBase(currency._currency,
+                                           PyUnicode_AsUTF8(code),
+                                           PyUnicode_AsUTF8(name),
+                                           PyUnicode_AsUTF8(symbol))
+        return obj
+
+    @staticmethod
+    def create(currency: CurrencyBase, code: str, name: str, symbol: str, base: UnitBase, decimals: int):
+        obj = UnitBase()
+        obj._unit = cryptoUnitCreate(<BRCryptoCurrency>currency._currency,
+                                     PyUnicode_AsUTF8(code),
+                                     PyUnicode_AsUTF8(name),
+                                     PyUnicode_AsUTF8(symbol),
+                                     <BRCryptoUnit>base._unit,
+                                     PyLong_AsSize_t(decimals))
+        return obj
+
+
 cdef class CryptoAmountBase:
     cdef BRCryptoAmount _amount
 
     @property
-    def int_value(self) -> int:
+    def unit(self) -> UnitBase:
+        obj = UnitBase()
+        obj._unit = cryptoAmountGetUnit(self._amount)
+        return obj
+
+    @property
+    def currency(self) -> CurrencyBase:
+        return self.unit.currency
+
+    @property
+    def is_negative(self) -> bool:
+        return CRYPTO_TRUE == cryptoAmountIsNegative(self._amount)
+
+    @property
+    def int(self) -> int:
+        cdef const char * amt = cryptoAmountGetStringPrefaced(self._amount, 16, "")
+        return int.from_bytes(amt, byteorder='little')
+
+    def float(self, as_unit: UnitBase) -> float:
+        if not isinstance(as_unit, UnitBase):
+            raise ValueError("as_unit must be a Unit object")
         cdef BRCryptoBoolean overflow
-        val = cryptoAmountGetIntegerRaw(self._amount, &overflow)
-        if overflow == CRYPTO_TRUE:
-            raise ValueError("amount overflow")
-        return PyLong_FromUnsignedLong(val)
+        cdef double ret = cryptoAmountGetDouble(self._amount, as_unit._unit, &overflow)
+        return ret
+
+    def format(self, as_unit: UnitBase, locale='en_US') -> str:
+        return format_currency(self.float(as_unit), currency=as_unit.symbol, locale=locale,
+                               currency_digits=as_unit.decimals)
+
+    def is_compatible(self, with_amount: CryptoAmountBase) -> bool:
+        if not isinstance(with_amount, CryptoAmountBase):
+            raise ValueError("with_amount must be an Amount object")
+        return CRYPTO_TRUE == cryptoAmountIsCompatible(self._amount, with_amount._amount)
+
+    def has_currency(self, currency: CurrencyBase) -> bool:
+        if not isinstance(currency, CurrencyBase):
+            raise ValueError("currency must be a Currency object")
+        return CRYPTO_TRUE == cryptoAmountHasCurrency(self._amount, currency._currency)
+
+    def convert(self, to_unit: UnitBase) -> CryptoAmountBase:
+        if not isinstance(to_unit, UnitBase):
+            raise ValueError("to_unit must be a Unit object")
+        obj = CryptoAmountBase()
+        obj._amount = cryptoAmountConvertToUnit(self._amount, to_unit._unit)
+        return obj
+
+    def negate(self) -> CryptoAmountBase:
+        obj = CryptoAmountBase()
+        obj._amount = cryptoAmountNegate(self._amount)
+        return obj
+
+    def is_zero(self) -> bool:
+        return CRYPTO_TRUE == cryptoAmountIsZero(self._amount)
+
+    def __add__(self, other) -> CryptoAmountBase:
+        if not self.is_compatible(other):
+            raise ValueError("incompatible amount")
+        obj = CryptoAmountBase()
+        obj._amount = cryptoAmountAdd(<BRCryptoAmount>self._amount, <BRCryptoAmount>other._amount)
+        return obj
+
+    def __sub__(self, other) -> CryptoAmountBase:
+        if not self.is_compatible(other):
+            raise ValueError("incompatible amount")
+        obj = CryptoAmountBase()
+        obj._amount = cryptoAmountSub(<BRCryptoAmount>self._amount, <BRCryptoAmount>other._amount)
+        return obj
+
+    def __eq__(self, other):
+        if not isinstance(other, CryptoAmountBase):
+            return False
+        return CRYPTO_COMPARE_EQ == cryptoAmountCompare(<BRCryptoAmount>self._amount, <BRCryptoAmount>other._amount)
+
+    def __lt__(self, other):
+        if not self.is_compatible(other):
+            return False
+        return CRYPTO_COMPARE_LT == cryptoAmountCompare(<BRCryptoAmount>self._amount, <BRCryptoAmount>other._amount)
+
+    def __gt__(self, other):
+        if not self.is_compatible(other):
+            return False
+        return CRYPTO_COMPARE_GT == cryptoAmountCompare(<BRCryptoAmount>self._amount, <BRCryptoAmount>other._amount)
+
+    def __ne__(self, other):
+        if not isinstance(other, CryptoAmountBase):
+            return True
+        return CRYPTO_COMPARE_EQ != cryptoAmountCompare(<BRCryptoAmount>self._amount, <BRCryptoAmount>other._amount)
+
+    def __le__(self, other):
+        if not self.is_compatible(other):
+            return False
+        return CRYPTO_COMPARE_GT != cryptoAmountCompare(<BRCryptoAmount>self._amount, <BRCryptoAmount>other._amount)
+
+    def __gt__(self, other):
+        if not self.is_compatible(other):
+            return False
+        return CRYPTO_COMPARE_LT != cryptoAmountCompare(<BRCryptoAmount>self._amount, <BRCryptoAmount>other._amount)
 
     def __str__(self):
-        return f"{self.int_value}"
+        return self.format(self.unit)
 
     def __repr__(self):
-        return f"<Amount: {self.int_value}>"
+        return f"<Amount: {self.format(self.unit)} unit={self.unit}>"
 
 cdef class FeeBasisBase:
     cdef BRCryptoFeeBasis _fee_basis
@@ -443,9 +597,9 @@ cdef class FeeBasisBase:
         return obj
 
     @property
-    def price_per_cost_factor_unit(self) -> CryptoUnitBase:
+    def price_per_cost_factor_unit(self) -> UnitBase:
         cdef BRCryptoUnit unit = cryptoFeeBasisGetPricePerCostFactorUnit(self._fee_basis)
-        obj = CryptoUnitBase()
+        obj = UnitBase()
         obj._unit = unit
         return obj
 
@@ -467,12 +621,27 @@ cdef class CurrencyBase:
             cryptoCurrencyGive(self._currency)
 
     @property
-    def name(self):
+    def uids(self) -> str:
+        return PyUnicode_FromString(cryptoCurrencyGetUids(self._currency))
+
+    @property
+    def name(self) -> str:
         return PyUnicode_FromString(cryptoCurrencyGetName(self._currency))
 
     @property
-    def code(self):
+    def code(self) -> str:
         return PyUnicode_FromString(cryptoCurrencyGetCode(self._currency))
+
+    @property
+    def type(self) -> str:
+        return PyUnicode_FromString(cryptoCurrencyGetType(self._currency))
+
+    @property
+    def issuer(self) -> Optional[str]:
+        cdef const char * issuer = cryptoCurrencyGetIssuer(self._currency)
+        if issuer == NULL:
+            return None
+        return PyUnicode_FromString(issuer)
 
     def __repr__(self):
         return f"<Currency: name={self.name} code={self.code}>"
@@ -486,6 +655,13 @@ cdef class AddressBase:
 
 cdef class TransferBase:
     cdef BRCryptoTransfer _transfer
+    cdef BRCryptoWallet _wallet
+
+    def __dealloc__(self):
+        if self._transfer != NULL:
+            cryptoTransferGive(self._transfer)
+        if self._wallet != NULL:
+            cryptoWalletGive(self._wallet)
 
     @property
     def source_address(self):
@@ -509,16 +685,18 @@ cdef class TransferBase:
         return obj
 
     def __str__(self):
-        # return f"{self.source_address}->{self.target_address}"
-        return f"xfer amount={self.amount}"
+        return f"{self.source_address}->{self.target_address} {self.amount}"
 
 
 cdef class WalletBase:
     cdef BRCryptoWallet _wallet
+    cdef BRCryptoWalletManager _manager
 
     def __dealloc__(self):
         if self._wallet is not NULL:
             cryptoWalletGive(self._wallet)
+        if self._manager is not NULL:
+            cryptoWalletManagerGive(self._manager)
 
     @property
     def currency(self) -> str:
@@ -552,20 +730,16 @@ cdef class WalletBase:
         return self.address(AddressScheme.GEN_DEFAULT)
 
     def create_transfer(self, network: NetworkBase, address: AddressBase, amount: int, fee_basis: FeeBasisBase):
-        # cdef BRCryptoAddress caddress = cryptoAddressCreateFromString(network._network, PyUnicode_AsUTF8(address))
         cdef BRCryptoCurrency currency = cryptoNetworkGetCurrency(network._network)
-        printf("\n\nONE\n\n")
-        cdef BRCryptoUnit cunit = cryptoNetworkGetUnitAsDefault(network._network, currency)
-        printf("\n\nTWO\n\n")
-        cdef BRCryptoAmount camount = cryptoAmountCreateInteger(PyLong_AsLong(amount), cunit)
-        printf("\n\nTHREE\n\n")
+        cdef BRCryptoUnit cunit = cryptoUnitGetBaseUnit(cryptoNetworkGetUnitAsDefault(network._network, currency))
+        cdef uint64_t iamount = PyLong_AsLong(amount)
+        cdef BRCryptoAmount camount = cryptoAmountCreateInteger(iamount, cunit)
         cdef BRCryptoFeeBasis cbasis = cryptoWalletGetDefaultFeeBasis(self._wallet)
-        printf("\n\nFOUR\n\n")
-        cdef BRCryptoTransfer ctransfer = cryptoWalletCreateTransfer(self._wallet, address._address, camount, cbasis, 0, NULL)
-        printf("\n\nFIVE\n\n")
+        cdef BRCryptoTransfer ctransfer = cryptoWalletManagerCreateTransfer(
+            self._manager, self._wallet, address._address, camount, cbasis, 0, NULL)  # returns NULL!
         obj = TransferBase()
         obj._transfer = ctransfer
-        printf("\n\nSIX\n\n")
+        obj._wallet = cryptoWalletTake(self._wallet)
         return obj
 
     def __repr__(self):
@@ -610,6 +784,7 @@ cdef class WalletManagerBase:
         for i in range(wallet_count):
             obj = WalletBase()
             obj._wallet = wallets[i]
+            obj._manager = cryptoWalletManagerTake(self._manager)
             ret.append(obj)
         return ret
 
