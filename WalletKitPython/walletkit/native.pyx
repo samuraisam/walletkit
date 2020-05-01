@@ -1,6 +1,6 @@
 from core cimport *
 from python cimport Py_INCREF, PyUnicode_AsUTF8, PyUnicode_FromString, PyBytes_FromStringAndSize
-from python cimport PyLong_AsLong, PyLong_AsSize_t
+from python cimport PyLong_AsLong, PyLong_AsSize_t, PyLong_FromUnsignedLong
 from libc.stdio cimport printf
 from libc.stdlib cimport malloc, free
 from asyncio import get_event_loop, new_event_loop, set_event_loop
@@ -13,9 +13,12 @@ from .model import BlockchainClient, WalletManagerListener
 from .model import (WalletManagerEventType, WalletManagerStateEvent, WalletManagerWalletEvent, WalletManagerSyncEvent,
                     WalletManagerBlockHeightEvent, WalletManagerSyncStoppedReason)
 
-cdef extern from "stdlib.h":
-    void exit(int status)
+# TODO: this should not be global
+def executor_initializer():
+    event_loop = new_event_loop()
+    set_event_loop(event_loop)
 
+executor = ThreadPoolExecutor(max_workers=10, initializer=executor_initializer)
 
 cdef class CryptoWalletListener:
     cdef BRCryptoCWMListener _listener
@@ -71,13 +74,6 @@ cdef class CryptoWalletListener:
         cryptoWalletGive(wallet)
         cryptoTransferGive(transfer)
 
-# TODO: this should not be global
-def executor_initializer():
-    event_loop = new_event_loop()
-    set_event_loop(event_loop)
-
-executor = ThreadPoolExecutor(max_workers=10, initializer=executor_initializer)
-
 cdef class GetBlockHeightJob:
     cdef BRCryptoWalletManager _manager
     cdef BRCryptoClientCallbackState _callback_state
@@ -94,6 +90,21 @@ cdef class GetBlockHeightJob:
             cwmAnnounceGetBlockNumberFailure(self._manager, self._callback_state)
         finally:
             cryptoWalletManagerGive(self._manager)
+
+
+cdef extern from "string.h":
+    int strcmp(const char *s1, const char *s2)
+
+
+cdef BRCryptoTransferStateType crypto_transfer_state(const char *state_str):
+    if 0 == strcmp(state_str, "confirmed"):
+        return CRYPTO_TRANSFER_STATE_INCLUDED
+    if 0 == strcmp(state_str, "submitted") or 0 == strcmp(state_str, "reverted"):
+        return CRYPTO_TRANSFER_STATE_SUBMITTED
+    if 0 == strcmp(state_str, "failed") or 0 == strcmp(state_str, "rejected"):
+        return CRYPTO_TRANSFER_STATE_ERRORED
+    # TODO: not this!
+    return CRYPTO_TRANSFER_STATE_SUBMITTED
 
 cdef class GetTransactionsJob:
     cdef BRCryptoWalletManager _manager
@@ -117,7 +128,7 @@ cdef class GetTransactionsJob:
                 cwmAnnounceGetTransactionsItem(
                     self._manager,
                     self._callback_state,
-                    TransferStatus.from_network_status(tx.status).value,
+                    crypto_transfer_state(PyUnicode_AsUTF8(tx.status)),
                     tx.data,
                     PyLong_AsSize_t(len(tx.data)),
                     PyLong_AsLong(tx.timestamp),
@@ -125,7 +136,7 @@ cdef class GetTransactionsJob:
                 )
             cwmAnnounceGetTransactionsComplete(self._manager, self._callback_state, CRYPTO_TRUE)
         except Exception as e:
-            printf("[GetTransactionsJob] error: %s", PyUnicode_AsUTF8(str(e)))
+            printf("[GetTransactionsJob] error: %s\n", PyUnicode_AsUTF8(str(e)))
             cwmAnnounceGetTransactionsComplete(self._manager, self._callback_state, CRYPTO_FALSE)
         finally:
             cryptoWalletManagerGive(self._manager)
@@ -378,14 +389,124 @@ class TransferStatus(Enum):
     @staticmethod
     def from_network_status(status: str):
         m = {
-            "confirmed": TransferStatus.INCLUDED,
-            "submitted": TransferStatus.SUBMITTED,
-            "reverted": TransferStatus.SUBMITTED,
-            "failed": TransferStatus.ERRORED,
-            "rejected": TransferStatus.ERRORED
+            "confirmed": CRYPTO_TRANSFER_STATE_INCLUDED,
+            "submitted": CRYPTO_TRANSFER_STATE_SUBMITTED,
+            "reverted": CRYPTO_TRANSFER_STATE_SUBMITTED,
+            "failed": CRYPTO_TRANSFER_STATE_ERRORED,
+            "rejected": CRYPTO_TRANSFER_STATE_ERRORED
         }
-        return m[status]
+        return TransferStatus(m[status])
 
+
+cdef class CryptoUnitBase:
+    cdef BRCryptoUnit _unit
+
+    @property
+    def name(self) -> str:
+        return PyUnicode_FromString(cryptoUnitGetName(self._unit))
+
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        return f"<Unit: {self.name}>"
+
+cdef class CryptoAmountBase:
+    cdef BRCryptoAmount _amount
+
+    @property
+    def int_value(self) -> int:
+        cdef BRCryptoBoolean overflow
+        val = cryptoAmountGetIntegerRaw(self._amount, &overflow)
+        if overflow == CRYPTO_TRUE:
+            raise ValueError("amount overflow")
+        return PyLong_FromUnsignedLong(val)
+
+    def __str__(self):
+        return f"{self.int_value}"
+
+    def __repr__(self):
+        return f"<Amount: {self.int_value}>"
+
+cdef class FeeBasisBase:
+    cdef BRCryptoFeeBasis _fee_basis
+
+    def __dealloc__(self):
+        if self._fee_basis is not NULL:
+            cryptoFeeBasisGive(self._fee_basis)
+
+    @property
+    def price_per_cost_factor(self) -> CryptoAmountBase:
+        cdef BRCryptoAmount amount = cryptoFeeBasisGetPricePerCostFactor(self._fee_basis)
+        obj = CryptoAmountBase()
+        obj._amount = amount
+        return obj
+
+    @property
+    def price_per_cost_factor_unit(self) -> CryptoUnitBase:
+        cdef BRCryptoUnit unit = cryptoFeeBasisGetPricePerCostFactorUnit(self._fee_basis)
+        obj = CryptoUnitBase()
+        obj._unit = unit
+        return obj
+
+    @property
+    def fee(self) -> CryptoAmountBase:
+        cdef BRCryptoAmount amount = cryptoFeeBasisGetFee(self._fee_basis)
+        obj = CryptoAmountBase()
+        obj._amount = amount
+        return obj
+
+    def __repr__(self):
+        return f"<FeeBasis: {self.price_per_cost_factor}/{self.price_per_cost_factor_unit}>"
+
+cdef class CurrencyBase:
+    cdef BRCryptoCurrency _currency
+
+    def __dealloc__(self):
+        if self._currency is not NULL:
+            cryptoCurrencyGive(self._currency)
+
+    @property
+    def name(self):
+        return PyUnicode_FromString(cryptoCurrencyGetName(self._currency))
+
+    @property
+    def code(self):
+        return PyUnicode_FromString(cryptoCurrencyGetCode(self._currency))
+
+    def __repr__(self):
+        return f"<Currency: name={self.name} code={self.code}>"
+
+cdef class WalletBase:
+    cdef BRCryptoWallet _wallet
+
+    def __dealloc__(self):
+        if self._wallet is not NULL:
+            cryptoWalletGive(self._wallet)
+
+    @property
+    def currency(self) -> str:
+        cdef BRCryptoCurrency currency = cryptoWalletGetCurrency(self._wallet)
+        obj = CurrencyBase()
+        obj._currency = currency
+        return obj
+
+    @property
+    def balance(self) -> CryptoAmountBase:
+        cdef BRCryptoAmount amount = cryptoWalletGetBalance(self._wallet)
+        obj = CryptoAmountBase()
+        obj._amount = amount
+        return obj
+
+    @property
+    def default_fee_basis(self) -> FeeBasisBase:
+        cdef BRCryptoFeeBasis basis = cryptoWalletGetDefaultFeeBasis(self._wallet)
+        obj = FeeBasisBase()
+        obj._fee_basis = basis
+        return obj
+
+    def __repr__(self):
+        return f"<Wallet: currency={self.currency} default_fee_basis={self.default_fee_basis}>"
 
 cdef class WalletManagerBase:
     cdef BRCryptoWalletManager _manager
@@ -411,6 +532,16 @@ cdef class WalletManagerBase:
 
     def set_reachable(self, reachable: bool):
         cryptoWalletManagerSetNetworkReachable(self._manager, CRYPTO_TRUE if reachable else CRYPTO_FALSE)
+
+    def get_wallets(self) -> List[WalletBase]:
+        cdef size_t wallet_count = 0
+        cdef BRCryptoWallet *wallets = cryptoWalletManagerGetWallets(self._manager, &wallet_count)
+        ret = []
+        for i in range(wallet_count):
+            obj = WalletBase()
+            obj._wallet = wallets[i]
+            ret.append(obj)
+        return ret
 
 
 class WalletManager:

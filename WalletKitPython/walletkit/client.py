@@ -98,13 +98,9 @@ class Transaction(TypedJsonMixin):
     identifier: str
     hash: str
     blockchain_id: str
-    timestamp: str
     size: int
     fee: Amount
     confirmations: int
-    index: int
-    block_hash: str
-    block_height: int
     calls: List[Call]
     meta: Mapping[str, str]
     acknowledgements: int
@@ -113,6 +109,11 @@ class Transaction(TypedJsonMixin):
     _links: Mapping[str, Link]
     raw: Optional[str] = None
     proof: Optional[str] = None
+    first_seen: Optional[str] = None
+    block_height: Optional[int] = None
+    block_hash: Optional[str] = None
+    timestamp: Optional[str] = None
+    index: Optional[int] = None
 
 
 @dataclass

@@ -6,3 +6,4 @@ cdef extern from "Python.h":
     void Py_DECREF(object o)
     long PyLong_AsLong(object o)
     size_t PyLong_AsSize_t(object o)
+    object PyLong_FromUnsignedLong(long v)

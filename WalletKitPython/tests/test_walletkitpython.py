@@ -171,6 +171,12 @@ class TestWalletManager(unittest.TestCase):
                 break
             time.sleep(1)
 
+        wallets = wallet_manager.get_wallets()
+        self.assertTrue(len(wallets) > 0)
+        print(f"wallets: {wallets}")
+        for wallet in wallets:
+            print(f"wallet {wallet.currency.code} balance={wallet.balance.int_value}")
+
         wallet_manager.disconnect()
         wallet_manager.stop()
 

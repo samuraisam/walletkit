@@ -55,9 +55,9 @@ from walletkit.client import Blockset, Account
 #         client = self.event_loop.run_until_complete(self.client.create_client(str(uuid.uuid4())))
 #         self.client.token = client.token
 #         transactions_page = self.event_loop.run_until_complete(
-#             self.client.get_transactions(blockchain_id='bitcoin-mainnet', max_page_size=20))
+#             self.client.get_transactions(blockchain_id='bitcoin-testnet', addresses=['mpCBLBcrtjnCPewggYDZ3MSF4crCKBgVTC'], max_page_size=20))
 #         self.assertIsNotNone(transactions_page)
-#         self.assertEqual(20, len(transactions_page.transactions))
+#         self.assertEqual(4, len(transactions_page.transactions))
 #
 #     def test_get_transactions_empty_page(self):
 #         client = self.event_loop.run_until_complete(self.client.create_client(str(uuid.uuid4())))
