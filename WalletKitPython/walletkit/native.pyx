@@ -9,10 +9,9 @@ from uuid import uuid4
 from time import time_ns
 from typing import List, Tuple, Callable, Optional
 from enum import Enum
-from babel.numbers import format_currency
-from .model import BlockchainClient, WalletManagerListener
-from .model import (WalletManagerEventType, WalletManagerStateEvent, WalletManagerWalletEvent, WalletManagerSyncEvent,
-                    WalletManagerBlockHeightEvent, WalletManagerSyncStoppedReason)
+from walletkit.model import BlockchainClient, WalletManagerListener
+from walletkit.model import (WalletManagerEventType, WalletManagerStateEvent, WalletManagerWalletEvent,
+                             WalletManagerSyncEvent, WalletManagerBlockHeightEvent, WalletManagerSyncStoppedReason)
 
 # TODO: this should not be global
 def executor_initializer():
@@ -259,13 +258,25 @@ cdef class NetworkBase:
     def currency_code(self) -> str:
         return PyUnicode_FromString(cryptoNetworkGetCurrencyCode(self._network))
 
-    @property
     def height(self) -> int:
         return PyLong_FromUnsignedLong(cryptoNetworkGetHeight(self._network))
 
-    @height.setter
-    def height(self, value: int):
+    def set_height(self, value: int):
         cryptoNetworkSetHeight(self._network, PyLong_AsUnsignedLong(value))
+
+    def get_currency(self):
+        obj = CurrencyBase()
+        obj._currency = cryptoNetworkGetCurrency(self._network)
+        return obj
+
+    def set_currency(self, new_currency: CurrencyBase):
+        cryptoNetworkSetCurrency(self._network, new_currency._currency)
+
+    def add_currency(self, new_currency: CurrencyBase, base_unit: UnitBase, default_unit: UnitBase):
+        cryptoNetworkAddCurrency(self._network, new_currency._currency, base_unit._unit, default_unit._unit)
+
+    def add_currency_unit(self, currency: CurrencyBase, unit: UnitBase):
+        cryptoNetworkAddCurrencyUnit(self._network, currency._currency, unit._unit)
 
     def __repr__(self):
         return f'<Network {self.name} mainnet={self.is_mainnet}>'
@@ -524,10 +535,6 @@ cdef class AmountBase:
         cdef double ret = cryptoAmountGetDouble(self._amount, as_unit._unit, &overflow)
         return ret
 
-    def format(self, as_unit: UnitBase, locale='en_US') -> str:
-        return format_currency(self.float(as_unit), currency=as_unit.symbol, locale=locale,
-                               currency_digits=as_unit.decimals)
-
     def is_compatible(self, with_amount: AmountBase) -> bool:
         if not isinstance(with_amount, AmountBase):
             raise ValueError("with_amount must be an Amount object")
@@ -598,10 +605,10 @@ cdef class AmountBase:
         return CRYPTO_COMPARE_LT != cryptoAmountCompare(<BRCryptoAmount> self._amount, <BRCryptoAmount> other._amount)
 
     def __str__(self):
-        return self.format(self.unit)
+        return str(self.int)
 
     def __repr__(self):
-        return f"<Amount: {self.format(self.unit)} unit={self.unit}>"
+        return f"<Amount: {self.int} unit={self.unit}>"
 
 cdef class FeeBasisBase:
     cdef BRCryptoFeeBasis _fee_basis
@@ -822,6 +829,15 @@ cdef class WalletManagerBase:
             obj._manager = cryptoWalletManagerTake(self._manager)
             ret.append(obj)
         return ret
+
+    def get_wallet_for_currency(self, currency: CurrencyBase) -> WalletBase:
+        cdef BRCryptoWallet wallet = cryptoWalletManagerGetWalletForCurrency(self._manager, currency._currency)
+        if wallet == NULL:
+            raise ValueError(f"no wallet for {currency}")
+        obj = WalletBase()
+        obj._wallet = wallet
+        obj._manager = cryptoWalletManagerTake(self._manager)
+        return obj
 
     def sign(self, transfer: TransferBase, paper_key: str):
         if CRYPTO_TRUE != cryptoWalletManagerSign(self._manager, transfer._wallet, transfer._transfer,

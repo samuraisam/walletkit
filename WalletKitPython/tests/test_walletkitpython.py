@@ -115,7 +115,9 @@ class TestWalletManager(unittest.TestCase):
     def test_create(self):
         # network = Network.find_builtin('bitcoin-testnet')
         # network.height = 1723072
-        phrase_from_env = os.getenv('WALLETKIT_PHRASE')
+        phrase_from_env = os.getenv('WALLETKIT_PHRASE', None)
+        if phrase_from_env is None:
+            raise ValueError('Could not get walletkit phrase from environment variable WALLETKIT_PHRASE')
         # if phrase_from_env is not None:
         #     print('using phrase from environment')
         #     timestamp = 1588319433
@@ -172,10 +174,12 @@ class TestWalletManager(unittest.TestCase):
         # time.sleep(0.01)  # DEADLOCK PROOF
         # wallet_manager.stop()
 
-        network = Bitcoin.testnet()
-        get_event_loop().run_until_complete(network.start())
-        wallet = get_event_loop().run_until_complete(network.wallet(phrase=phrase_from_env))
+        testnet = Bitcoin.testnet()
+        get_event_loop().run_until_complete(testnet.start())
+        wallet = get_event_loop().run_until_complete(testnet.wallet(phrase=phrase_from_env))
         events = get_event_loop().run_until_complete(wallet.sync())
         print('events', events)
+
+        print('balance', wallet.balance(testnet.BTC))
 
         print("done waiting")
