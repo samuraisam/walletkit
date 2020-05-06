@@ -8,3 +8,4 @@ cdef extern from "Python.h":
     size_t PyLong_AsSize_t(object o)
     object PyLong_FromUnsignedLong(long v)
     object PyLong_FromSize_t(size_t v)
+    unsigned long PyLong_AsUnsignedLong(object o)

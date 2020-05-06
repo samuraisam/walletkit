@@ -14,6 +14,7 @@ from walletkit import client
 from walletkit.blockchain_client import BlocksetBlockchainClient
 from walletkit.model import WalletManagerListener, TransferEvent, WalletEvents, WalletManagerEvents
 from walletkit.model import WalletManagerEventType
+from walletkit.networks import Bitcoin
 from walletkit import Hasher, HasherType
 from walletkit.wordlists import english
 
@@ -142,7 +143,8 @@ class TestWalletManager(unittest.TestCase):
         return temp_dir
 
     def test_create(self):
-        network = Network.find_builtin('bitcoin-testnet')
+        network = Bitcoin.testnet
+        network.height = 1723072
         phrase_from_env = os.getenv('WALLETKIT_PHRASE')
         if phrase_from_env is not None:
             print('using phrase from environment')
@@ -184,13 +186,15 @@ class TestWalletManager(unittest.TestCase):
         self.assertTrue(len(wallets) > 0)
         print(f"wallets: {wallets}")
         for wallet in wallets:
-            print(f"wallet {wallet.currency.code} balance={wallet.balance}")
+            print(f"wallet {wallet.currency.code} balance={wallet.balance} balance_int={wallet.balance.int}")
 
         time.sleep(0.01)
         wallet = wallets[0]
-        print(f"createing transfer to {wallet.address(AddressScheme.GEN_DEFAULT)}")
-        xfer = wallet.create_transfer(network, wallet.address(AddressScheme.GEN_DEFAULT), 11000,
-                                      wallet.default_fee_basis)
+        to_address = wallet.address(AddressScheme.GEN_DEFAULT)
+        amount = Bitcoin.SAT(11000)
+        fee = wallet.default_fee_basis
+        print(f"creating transfer to {to_address} amount={amount} fee={fee}")
+        xfer = wallet.create_transfer(network, to_address, amount, fee)
         print(f"transfer {xfer}")
 
         time.sleep(0.01)
