@@ -106,36 +106,6 @@ class EventAccumulatingListener(WalletManagerListener):
 
 
 class TestWalletManager(unittest.TestCase):
-    account: client.Account
-
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.email = os.getenv('BLOCKSET_EMAIL', None)
-        cls.password = os.getenv('BLOCKSET_PASSWORD', None)
-        if cls.email is None or cls.password is None:
-            raise ValueError("BLOCKSET_EMAIL and BLOCKSET_PASSWORD must be set in the environment")
-        cls.account = get_event_loop().run_until_complete(
-            client.Blockset().create_or_login_account('Test User', cls.email, cls.password))
-
-    def setUp(self) -> None:
-        blockset = client.Blockset()
-        blockset.token = TestWalletManager.account.token
-        self.event_loop = get_event_loop()
-        clients = self.event_loop.run_until_complete(blockset.get_clients())
-        if not len(clients):
-            clients = [self.event_loop.run_until_complete(blockset.create_client('WalletTest'))]
-        self.client = clients[0]
-        self.thread_local = threading.local()
-
-    def blockset_blockchain_client_factory(self):
-        val = getattr(self.thread_local, '_blockset_client', None)
-        if val is None:
-            blockset = client.Blockset(logging_enabled=False)
-            blockset.use_token(self.client.token)
-            val = BlocksetBlockchainClient(blockset)
-            setattr(self.thread_local, '_blockset_client', val)
-        return val
-
     @staticmethod
     def _get_temp_dir():
         temp_dir = os.path.join(tempfile.gettempdir(), str(uuid.uuid4()))
@@ -143,63 +113,69 @@ class TestWalletManager(unittest.TestCase):
         return temp_dir
 
     def test_create(self):
-        network = Bitcoin.testnet
-        network.height = 1723072
+        # network = Network.find_builtin('bitcoin-testnet')
+        # network.height = 1723072
         phrase_from_env = os.getenv('WALLETKIT_PHRASE')
-        if phrase_from_env is not None:
-            print('using phrase from environment')
-            timestamp = 1588319433
-            uids = '3655ed8c-98b3-45ba-be66-d2e7682e2e63'
-            account = Account.create_from_phrase(phrase_from_env, timestamp, uids)
-        else:
-            print('generating new phrase')
-            account = Account.generate(english.words)
-        listener = EventAccumulatingListener()
-        print('creating wallet manager')
-        wallet_manager = WalletManager.create(account=account,
-                                              network=network,
-                                              blockchain_client_factory=self.blockset_blockchain_client_factory,
-                                              sync_mode=SyncMode.API_ONLY,
-                                              address_scheme=AddressScheme.GEN_DEFAULT,
-                                              storage_path=TestWalletManager._get_temp_dir(),
-                                              listener=listener)
-        print('wallet manager created')
-        time.sleep(0.01)
+        # if phrase_from_env is not None:
+        #     print('using phrase from environment')
+        #     timestamp = 1588319433
+        #     uids = '3655ed8c-98b3-45ba-be66-d2e7682e2e63'
+        #     account = Account.create_from_phrase(phrase_from_env, timestamp, uids)
+        # else:
+        #     print('generating new phrase')
+        #     account = Account.generate(english.words)
+        # listener = EventAccumulatingListener()
+        # print('creating wallet manager')
+        # wallet_manager = WalletManager.create(account=account,
+        #                                       network=network,
+        #                                       blockchain_client_factory=self.blockset_blockchain_client_factory,
+        #                                       sync_mode=SyncMode.API_ONLY,
+        #                                       address_scheme=AddressScheme.GEN_DEFAULT,
+        #                                       storage_path=TestWalletManager._get_temp_dir(),
+        #                                       listener=listener)
+        # print('wallet manager created')
+        # time.sleep(0.01)
         # wallet_manager.set_reachable(True)  # deadlocks?
         # print('set reachable = True')
-        wallet_manager.sync()
-        time.sleep(0.01)
-        print('started sync')
-        time.sleep(0.01)
-        wallet_manager.connect()
-        print('connected')
+        # wallet_manager.sync()
+        # time.sleep(0.01)
+        # print('started sync')
+        # time.sleep(0.01)
+        # wallet_manager.connect()
+        # print('connected')
+        #
+        # for i in range(100):
+        #     was_stopped = listener.was_stopped()
+        #     events = listener.read_wallet_manager_events()
+        #     print(f"events={events}")
+        #     if was_stopped:
+        #         break
+        #     time.sleep(1)
 
-        for i in range(100):
-            was_stopped = listener.was_stopped()
-            events = listener.read_wallet_manager_events()
-            print(f"events={events}")
-            if was_stopped:
-                break
-            time.sleep(1)
+        # wallets = wallet_manager.get_wallets()
+        # self.assertTrue(len(wallets) > 0)
+        # print(f"wallets: {wallets}")
+        # for wallet in wallets:
+        #     print(f"wallet {wallet.currency.code} balance={wallet.balance} balance_int={wallet.balance.int}")
+        #
+        # time.sleep(0.01)
+        # wallet = wallets[0]
+        # to_address = wallet.address(AddressScheme.GEN_DEFAULT)
+        # amount = Bitcoin.SAT(11000)
+        # fee = wallet.default_fee_basis
+        # print(f"creating transfer to {to_address} amount={amount} fee={fee}")
+        # xfer = wallet.create_transfer(network, to_address, amount, fee)
+        # print(f"transfer {xfer}")
+        #
+        # time.sleep(0.01)
+        # wallet_manager.disconnect()
+        # time.sleep(0.01)  # DEADLOCK PROOF
+        # wallet_manager.stop()
 
-        wallets = wallet_manager.get_wallets()
-        self.assertTrue(len(wallets) > 0)
-        print(f"wallets: {wallets}")
-        for wallet in wallets:
-            print(f"wallet {wallet.currency.code} balance={wallet.balance} balance_int={wallet.balance.int}")
-
-        time.sleep(0.01)
-        wallet = wallets[0]
-        to_address = wallet.address(AddressScheme.GEN_DEFAULT)
-        amount = Bitcoin.SAT(11000)
-        fee = wallet.default_fee_basis
-        print(f"creating transfer to {to_address} amount={amount} fee={fee}")
-        xfer = wallet.create_transfer(network, to_address, amount, fee)
-        print(f"transfer {xfer}")
-
-        time.sleep(0.01)
-        wallet_manager.disconnect()
-        time.sleep(0.01)  # DEADLOCK PROOF
-        wallet_manager.stop()
+        network = Bitcoin.testnet()
+        get_event_loop().run_until_complete(network.start())
+        wallet = get_event_loop().run_until_complete(network.wallet(phrase=phrase_from_env))
+        events = get_event_loop().run_until_complete(wallet.sync())
+        print('events', events)
 
         print("done waiting")
