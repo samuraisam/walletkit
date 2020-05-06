@@ -1,5 +1,5 @@
 from core cimport *
-from python cimport Py_INCREF, PyUnicode_AsUTF8, PyUnicode_FromString, PyBytes_FromStringAndSize
+from python cimport Py_INCREF, PyUnicode_AsUTF8, PyUnicode_FromString, PyBytes_FromStringAndSize, PyFloat_FromDouble
 from python cimport PyLong_AsLong, PyLong_AsSize_t, PyLong_FromUnsignedLong, PyLong_FromSize_t, PyLong_AsUnsignedLong
 from libc.stdio cimport printf
 from libc.stdlib cimport malloc, free
@@ -7,7 +7,7 @@ from asyncio import get_event_loop, new_event_loop, set_event_loop
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 from time import time_ns
-from typing import List, Tuple, Callable, Optional
+from typing import List, Tuple, Callable, Optional, Union
 from enum import Enum
 from walletkit.model import BlockchainClient, WalletManagerListener
 from walletkit.model import (WalletManagerEventType, WalletManagerStateEvent, WalletManagerWalletEvent,
@@ -228,6 +228,36 @@ class NetworkType(Enum):
     HBAR = CRYPTO_NETWORK_TYPE_HBAR
 
 
+cdef class NetworkFeeBase:
+    cdef BRCryptoNetworkFee _network_fee
+
+    @property
+    def time_in_ms(self) -> int:
+        return PyLong_FromUnsignedLong(cryptoNetworkFeeGetConfirmationTimeInMilliseconds(self._network_fee))
+
+    @property
+    def price_per_cost_factor(self) -> AmountBase:
+        obj = AmountBase()
+        obj._amount = cryptoNetworkFeeGetPricePerCostFactor(self._network_fee)
+        return obj
+
+    @property
+    def price_per_cost_factor_unit(self) -> UnitBase:
+        obj = UnitBase()
+        obj._unit = cryptoNetworkFeeGetPricePerCostFactorUnit(self._network_fee)
+        return obj
+
+
+class NetworkFee:
+    @staticmethod
+    def create(time_in_ms: int, price_per_cost_factor: AmountBase, price_per_cost_factor_unit: UnitBase) -> NetworkFeeBase:
+        obj = NetworkFeeBase()
+        obj._network_fee = cryptoNetworkFeeCreate(PyLong_AsUnsignedLong(time_in_ms),
+                                                  price_per_cost_factor._amount,
+                                                  price_per_cost_factor_unit._unit)
+        return obj
+
+
 cdef class NetworkBase:
     cdef BRCryptoNetwork _network
 
@@ -258,6 +288,26 @@ cdef class NetworkBase:
     def currency_code(self) -> str:
         return PyUnicode_FromString(cryptoNetworkGetCurrencyCode(self._network))
 
+    @property
+    def fees(self) -> List[NetworkFeeBase]:
+        cdef size_t fee_count = 0
+        cdef BRCryptoNetworkFee *cfees = cryptoNetworkGetNetworkFees(self._network, &fee_count)
+        fees = []
+        for i in range(fee_count):
+            obj = NetworkFeeBase()
+            obj._network_fee = cfees[i]
+            fees.append(obj)
+        return fees
+
+    def set_fees(self, fees: [NetworkFeeBase]):
+        cdef size_t fee_count = PyLong_AsSize_t(len(fees))
+        cdef BRCryptoNetworkFee *cfees = <BRCryptoNetworkFee *>malloc(sizeof(BRCryptoNetworkFee)*fee_count)
+        for i in range(fee_count):
+            cfee = <NetworkFeeBase> fees[i]
+            cfees[i] = cfee._network_fee
+        cryptoNetworkSetNetworkFees(self._network, cfees, fee_count)
+
+    @property
     def height(self) -> int:
         return PyLong_FromUnsignedLong(cryptoNetworkGetHeight(self._network))
 
@@ -277,6 +327,13 @@ cdef class NetworkBase:
 
     def add_currency_unit(self, currency: CurrencyBase, unit: UnitBase):
         cryptoNetworkAddCurrencyUnit(self._network, currency._currency, unit._unit)
+
+    def base_unit(self, currency: CurrencyBase) -> UnitBase:
+        if CRYPTO_TRUE == cryptoNetworkHasCurrency(self._network, currency._currency):
+            obj = UnitBase()
+            obj._unit = cryptoNetworkGetUnitAsBase(self._network, currency._currency)
+            return obj
+        return None
 
     def __repr__(self):
         return f'<Network {self.name} mainnet={self.is_mainnet}>'
@@ -471,16 +528,23 @@ cdef class UnitBase:
             return False
         return cryptoUnitIsIdentical(self._unit, <BRCryptoUnit> other._unit)
 
-    def __call__(self, amount: int):
+    def __call__(self, amount: Union[int, float]):
         """
         Create an Amount based on this unit.
         :param amount: the amount
         :return: a new Amount
         """
-        cdef const char *camount = PyUnicode_AsUTF8(str(amount))
+        if isinstance(amount, float):
+            str_amount = '{:.{}f}'.format(amount, self.decimals)
+        elif isinstance(amount, int):
+            str_amount = str(amount)
+        elif isinstance(amount, str):
+            str_amount = amount
+        else:
+            raise TypeError(f'can not convert {type(amount)} to a unit')
         cdef BRCryptoBoolean cisnegative = CRYPTO_TRUE if amount < 0 else CRYPTO_FALSE
         obj = AmountBase()
-        obj._amount = cryptoAmountCreateString(camount, cisnegative, self._unit)
+        obj._amount = cryptoAmountCreateString(PyUnicode_AsUTF8(str_amount), cisnegative, self._unit)
         return obj
 
 
@@ -610,6 +674,17 @@ cdef class AmountBase:
     def __repr__(self):
         return f"<Amount: {self.int} unit={self.unit}>"
 
+
+class Amount:
+    @staticmethod
+    def create(amount_str: str, is_negative: bool, unit: UnitBase):
+        obj = AmountBase()
+        obj._amount = cryptoAmountCreateString(
+            PyUnicode_AsUTF8(amount_str), CRYPTO_TRUE if is_negative else CRYPTO_FALSE, unit._unit
+        )
+        return obj
+
+
 cdef class FeeBasisBase:
     cdef BRCryptoFeeBasis _fee_basis
 
@@ -632,6 +707,10 @@ cdef class FeeBasisBase:
         return obj
 
     @property
+    def cost_factor(self) -> float:
+        return PyFloat_FromDouble(cryptoFeeBasisGetCostFactor(self._fee_basis))
+
+    @property
     def fee(self) -> AmountBase:
         cdef BRCryptoAmount amount = cryptoFeeBasisGetFee(self._fee_basis)
         obj = AmountBase()
@@ -639,7 +718,7 @@ cdef class FeeBasisBase:
         return obj
 
     def __repr__(self):
-        return f"<FeeBasis: {self.price_per_cost_factor}/{self.price_per_cost_factor_unit}>"
+        return f"<FeeBasis: {self.fee}>"
 
 cdef class CurrencyBase:
     cdef BRCryptoCurrency _currency
@@ -695,6 +774,13 @@ cdef class AddressBase:
     def __str__(self):
         return PyUnicode_FromString(cryptoAddressAsString(self._address))
 
+class Address:
+    @staticmethod
+    def from_str(address_str: str, network: NetworkBase) -> AddressBase:
+        obj = AddressBase()
+        obj._address = cryptoAddressTake(cryptoAddressCreateFromString(network._network, PyUnicode_AsUTF8(address_str)))
+        return obj
+
 cdef class TransferBase:
     cdef BRCryptoTransfer _transfer
     cdef BRCryptoWallet _wallet
@@ -706,24 +792,42 @@ cdef class TransferBase:
             cryptoWalletGive(self._wallet)
 
     @property
-    def source_address(self):
+    def source_address(self) -> AddressBase:
         cdef BRCryptoAddress caddress = cryptoTransferGetSourceAddress(self._transfer)
         obj = AddressBase()
         obj._address = caddress
         return obj
 
     @property
-    def target_address(self):
+    def target_address(self) -> AddressBase:
         cdef BRCryptoAddress caddress = cryptoTransferGetTargetAddress(self._transfer)
         obj = AddressBase()
         obj._address = caddress
         return obj
 
     @property
-    def amount(self):
+    def amount(self) -> AmountBase:
         cdef BRCryptoAmount camount = cryptoTransferGetAmount(self._transfer)
         obj = AmountBase()
         obj._amount = camount
+        return obj
+
+    @property
+    def estimated_fee(self) -> FeeBasisBase:
+        cdef BRCryptoFeeBasis fee = cryptoTransferGetEstimatedFeeBasis(self._transfer)
+        if fee == NULL:
+            return None
+        obj = FeeBasisBase()
+        obj._fee_basis = fee
+        return obj
+
+    @property
+    def confirmed_fee(self) -> FeeBasisBase:
+        cdef BRCryptoFeeBasis fee = cryptoTransferGetConfirmedFeeBasis(self._transfer)
+        if fee == NULL:
+            return None
+        obj = FeeBasisBase()
+        obj._fee_basis = fee
         return obj
 
     def __str__(self):
@@ -771,9 +875,11 @@ cdef class WalletBase:
         return self.address(AddressScheme.GEN_DEFAULT)
 
     def create_transfer(self, network: NetworkBase, address: AddressBase, amount: AmountBase, fee_basis: FeeBasisBase):
-
         if self.balance.int <= 0:
             raise ValueError("can not send a transfer with a 0 balance wallet")
+
+        if amount.int > self.balance.int:
+            raise ValueError("can not send a transfer with an amount greater than the wallet balance")
 
         cdef BRCryptoTransfer ctransfer = cryptoWalletManagerCreateTransfer(
             self._manager, self._wallet, address._address, amount._amount, fee_basis._fee_basis, 0, NULL)
@@ -803,6 +909,10 @@ cdef class WalletManagerBase:
         obj = NetworkBase()
         obj._network = network
         return obj
+
+    @property
+    def address_scheme(self) -> AddressScheme:
+        return AddressScheme(cryptoWalletManagerGetAddressScheme(self._manager))
 
     def connect(self):
         cryptoWalletManagerConnect(self._manager, NULL)  # TODO: sometimes deadlocks

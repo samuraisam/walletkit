@@ -69,6 +69,19 @@ class Network:
     async def start(self):
         blockchain = await self._threadlocal_client_factory().get_blockchain(self._network_name)
         self._network.set_height(blockchain.block_height)
+        logger.debug(f"[Network {self._network_name}] set height to {blockchain.block_height}")
+        base_unit = self._network.base_unit(self._network.get_currency())
+        fees = []
+        for fee in blockchain.fee_estimates:
+            amount = n.Amount.create(fee.fee.amount, False, base_unit)
+            logger.debug(f"[Network {self._network_name} discovered fee {amount}")
+            native_fee = n.NetworkFee.create(
+                time_in_ms=fee.estimated_confirmation_in,
+                price_per_cost_factor=amount,
+                price_per_cost_factor_unit=base_unit
+            )
+            fees.append(native_fee)
+        self._network.set_fees(fees)
 
     async def wallet(self, phrase: str,
                      uids: str = _default_uuid,

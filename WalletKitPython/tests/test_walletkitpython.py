@@ -182,4 +182,11 @@ class TestWalletManager(unittest.TestCase):
 
         print('balance', wallet.balance(testnet.BTC))
 
+        receive_addr = wallet.receive_address(testnet.BTC)
+        print('receive address', receive_addr)
+
+        transfer = wallet.create_transfer(testnet.BTC(0.00001), to=receive_addr)
+        print('transfer', transfer)
+        print('transfer fee', transfer.fee)
+
         print("done waiting")

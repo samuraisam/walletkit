@@ -9,3 +9,4 @@ cdef extern from "Python.h":
     object PyLong_FromUnsignedLong(long v)
     object PyLong_FromSize_t(size_t v)
     unsigned long PyLong_AsUnsignedLong(object o)
+    object PyFloat_FromDouble(double v)

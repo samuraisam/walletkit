@@ -165,6 +165,9 @@ cdef extern from "BRCryptoAmount.h":
     double cryptoAmountGetDouble(BRCryptoAmount amount, BRCryptoUnit unit, BRCryptoBoolean *overflow)
     uint64_t cryptoAmountGetIntegerRaw(BRCryptoAmount amount, BRCryptoBoolean *overflow)
     char *cryptoAmountGetStringPrefaced(BRCryptoAmount amount, int base, const char *preface)
+    BRCryptoAmount cryptoAmountTake(BRCryptoAmount instance)
+    BRCryptoAmount cryptoAmountTakeWeak(BRCryptoAmount instance)
+    void cryptoAmountGive(BRCryptoAmount instance)
 
 
 cdef extern from "BRCryptoNetwork.h":
